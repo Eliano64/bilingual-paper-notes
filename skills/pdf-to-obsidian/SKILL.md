@@ -39,12 +39,26 @@ Related skills, so you pick the right one:
 
 ```bash
 pip install -U "mineru>=4.0,<5" pymupdf
-mineru-kit models download --tier standard     # ~2 GB; --tier basic is smaller
 ```
 
-Models land in MinerU's own home (`~/.mineru`). Set `MINERU_HOME` (or pass
-`--mineru-home`) consistently when downloading and parsing, otherwise the first
-parse downloads them again. If MinerU lives in another environment, use
+You do not have to pre-download the models: they are fetched on the first parse,
+and `run.py` reports which store it will use before parsing starts. It resolves,
+in order:
+
+1. `--mineru-home` / `PDF2MD_MINERU_HOME`, if you set one
+2. a populated `<cwd>/.mineru`
+3. a populated `~/.mineru` (MinerU's own default)
+4. otherwise `<cwd>/.mineru`, and the first parse downloads there
+   (~800 MB for `--tier basic`, ~2 GB for `standard`)
+
+So a second project downloads its own copy. To share one store across projects,
+pre-download into `~/.mineru` (`mineru-kit models download --tier standard` does
+exactly that) or set `MINERU_HOME` to one path and pass the same value every
+time. If an explicit home is empty while another store already holds models,
+`run.py` prints a warning naming both paths instead of silently downloading
+2 GB.
+
+If MinerU lives in another environment, use
 `--mineru-cmd 'conda run -n mineru mineru-kit'`.
 
 Translation endpoint, first match wins:
@@ -146,6 +160,12 @@ images, lost placeholders, lost formulas or failed translation.
     `\tag`/`\begin{array}` — that is pandoc's math parser, not Obsidian's.
 11. **Re-run safety is deliberate.** A temporarily unavailable source must not
     drop metadata a previous run resolved, so old values are kept and labelled.
+12. **Model stores must not duplicate silently.** `run.py` resolves the store
+    (explicit → `<cwd>/.mineru` → `~/.mineru` → download into `<cwd>/.mineru`),
+    prints the path and its contents before parsing, and warns when an explicit
+    `--mineru-home` is empty while another store already holds models. On that
+    warning, drop the flag or point it at the populated path — do not let the
+    parse run and re-download 2 GB.
 
 ## Recovering from a bad run
 

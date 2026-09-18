@@ -35,9 +35,15 @@ and the cross-references coherent.
 - PyMuPDF (`pip install pymupdf`) — optional, improves heading levels and page links
 - An OpenAI-compatible endpoint + API key for translation
 
-MinerU keeps its models in its own home (`~/.mineru`, ~2 GB). Keep `MINERU_HOME`
-consistent between downloading and parsing, or the first parse downloads them
-again. If MinerU lives in another environment, point the pipeline at it with
+Models are downloaded on the first parse (~800 MB for `--tier basic`, ~2 GB for
+`standard`) and `run.py` reports which store it will use before parsing. It
+looks, in order, at an explicit `--mineru-home` / `PDF2MD_MINERU_HOME`, a
+populated `<cwd>/.mineru`, a populated `~/.mineru`, and otherwise downloads into
+`<cwd>/.mineru` — so each project gets its own copy unless you point
+`MINERU_HOME` at one shared store (or pre-download into `~/.mineru`). If an
+explicit home is empty while another store already holds models, the pipeline
+warns with both paths rather than downloading 2 GB quietly. If MinerU lives in
+another environment, point the pipeline at it with
 `--mineru-cmd 'conda run -n mineru mineru-kit'`.
 
 ## Install

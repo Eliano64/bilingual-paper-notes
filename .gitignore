@@ -1,6 +1,13 @@
 # --- local work, never published -----------------------------------------
+PLAN.txt
+papers/
+out/
+tmp/
+logs/
+.mineru/
+*.zip
 
-# --- secrets: the config file holds an API key ---------------------------
+# --- secrets: config files that hold an API key --------------------------
 .pdf2obsidian.json
 .pdf2obsidian/
 config.local.json

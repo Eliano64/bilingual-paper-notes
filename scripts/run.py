@@ -50,6 +50,72 @@ def find_middle_json(root: Path):
     return hits[0] if hits else None
 
 
+TIER_MODEL_SIZE = {"flash": "no models needed",
+                  "basic": "~800 MB of ONNX models",
+                  "standard": "~2 GB (ONNX models + a 1.2 GB VLM)",
+                  "advanced": "~2 GB (same models as standard)"}
+
+
+def has_models(home: Path) -> bool:
+    models = home / "models"
+    try:
+        return models.is_dir() and any(models.iterdir())
+    except OSError:
+        return False
+
+
+def model_dirs(home: Path) -> list[str]:
+    """Real model directories, skipping MinerU's own bookkeeping (.locks, ...)."""
+    models = home / "models"
+    try:
+        return sorted(p.name for p in models.iterdir()
+                      if p.is_dir() and not p.name.startswith("."))
+    except OSError:
+        return []
+
+
+def resolve_mineru_home(explicit: str | None, cwd: Path) -> tuple[Path, str]:
+    """Where MinerU will read (and if necessary write) its models.
+
+    Order: an explicit setting wins; then a populated project-local `.mineru`;
+    then MinerU's own default home; and only if neither has models, download
+    into the project directory. A fresh 2 GB copy per project is the price of
+    that last rule, so the caller prints the path and size before it happens;
+    setting MINERU_HOME (or keeping one copy in `~/.mineru`) shares one store.
+    """
+    if explicit:
+        return Path(explicit).expanduser(), "explicit setting"
+    local, default = cwd / ".mineru", Path("~/.mineru").expanduser()
+    if has_models(local):
+        return local, "models found in the current directory"
+    if has_models(default):
+        return default, "models found in MinerU's default home"
+    return local, "nothing found here yet"
+
+
+def report_models(home: Path, why: str, tier: str, explicit: str | None, cwd: Path):
+    name, is_mscope = "modelscope", os.environ.get("MINERU_MODEL_SOURCE", "auto")
+    print(f"  models: {home}")
+    print(f"          ({why}; source={is_mscope})")
+    dirs = model_dirs(home)
+    if dirs:
+        print(f"          present: {', '.join(dirs)}")
+    else:
+        print(f"          empty -> MinerU will download {TIER_MODEL_SIZE.get(tier, 'the models')} "
+              f"on first use")
+        print(f"          to share one copy across projects, put them in ~/.mineru or set "
+              f"MINERU_HOME")
+    # an explicit home that is empty while a populated one exists is the only way
+    # to still pay for the download twice; say so instead of doing it quietly
+    if explicit:
+        others = [p for p in (cwd / ".mineru", Path("~/.mineru").expanduser())
+                  if not has_models(home) and str(p) != str(home) and has_models(p)]
+        if others:
+            print(f"          ! WARNING: {home} has no models but {others[0]} does; "
+                  f"this parse will download a second copy unless you drop "
+                  f"--mineru-home or point it at that path")
+
+
 def stage_parse(pdf: Path, out: Path, tier: str, mineru_home: str | None, mineru_cmd: str):
     parse_dir = out / "parse"
     parse_dir.mkdir(parents=True, exist_ok=True)
@@ -69,8 +135,9 @@ def stage_parse(pdf: Path, out: Path, tier: str, mineru_home: str | None, mineru
             "Parsing is the only stage that needs MinerU; with a middle_json.json in\n"
             "place already, run --stage md.")
     env = dict(os.environ)
-    if mineru_home:
-        env["MINERU_HOME"] = mineru_home
+    home, why = resolve_mineru_home(mineru_home, Path.cwd())
+    env["MINERU_HOME"] = str(home)
+    report_models(home, why, tier, mineru_home, Path.cwd())
     env.setdefault("PYTHONUTF8", "1")
     run(cmd + ["parse", str(pdf), "-o", str(parse_dir), "--tier", tier, "--format", "zip"], env=env)
     for z in parse_dir.glob("*.zip"):
@@ -182,7 +249,8 @@ def main(argv=None):
                     help="how to invoke MinerU; e.g. 'conda run -n mineru mineru-kit' "
                          "(env PDF2MD_MINERU_CMD)")
     ap.add_argument("--mineru-home", default=os.environ.get("PDF2MD_MINERU_HOME"),
-                    help="where MinerU keeps models (sets MINERU_HOME)")
+                    help="where MinerU keeps models; default: a populated <cwd>/.mineru "
+                         "or ~/.mineru, else <cwd>/.mineru (downloaded on first use)")
     ap.add_argument("--no-translate", action="store_true")
     ap.add_argument("--translate-captions", action="store_true",
                     help="also translate figure/table captions (default: off)")
