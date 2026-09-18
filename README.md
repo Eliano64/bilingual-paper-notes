@@ -1,4 +1,4 @@
-# pdf-to-obsidian
+# bilingual-paper-notes
 
 Turn an English academic PDF into **one bilingual Obsidian note**: the original
 English stays readable, a Chinese translation sits underneath in collapsible
@@ -37,7 +37,7 @@ and the cross-references coherent.
 
 Models are downloaded on the first parse (~800 MB for `--tier basic`, ~2 GB for
 `standard`) and `run.py` reports which store it will use before parsing. It
-looks, in order, at an explicit `--mineru-home` / `PDF2MD_MINERU_HOME`, a
+looks, in order, at an explicit `--mineru-home` / `BPN_MINERU_HOME`, a
 populated `<cwd>/.mineru`, a populated `~/.mineru`, and otherwise downloads into
 `<cwd>/.mineru` — so each project gets its own copy unless you point
 `MINERU_HOME` at one shared store (or pre-download into `~/.mineru`). If an
@@ -51,21 +51,21 @@ another environment, point the pipeline at it with
 As a pi package (installs both skills):
 
 ```bash
-pi install git:github.com/Eliano64/pdf-to-obsidian
+pi install git:github.com/Eliano64/bilingual-paper-notes
 ```
 
 Or clone it and call the scripts directly — nothing here imports pi:
 
 ```bash
 python scripts/run.py paper.pdf
-python skills/pdf-to-obsidian/SKILL.md    # what an agent reads
+python skills/bilingual-paper-notes/SKILL.md    # what an agent reads
 ```
 
 ## Two skills, one code base
 
 | Skill | Input | Entry point |
 |---|---|---|
-| `pdf-to-obsidian` | an English paper PDF | `scripts/run.py paper.pdf` |
+| `bilingual-paper-notes` | an English paper PDF | `scripts/run.py paper.pdf` |
 | `translate-markdown` | an English `.md` note | `scripts/run.py note.md` |
 
 Both share `scripts/` and the same intermediate layer (`blocks.jsonl`), so
@@ -76,8 +76,8 @@ adds only `md2blocks.py` — a segmenter, since there is nothing to extract.
 
 There is no pi dependency in the pipeline: standard library plus optional
 PyMuPDF, and the translation endpoint comes from `--base-url` / `--api-key` /
-`--model`, the `PDF2MD_*` (or `OPENAI_*`) environment variables, or a
-`.pdf2obsidian.json` config file. Reading pi's own config is only a last-resort
+`--model`, the `BPN_*` (or `OPENAI_*`) environment variables, or a
+`.bilingual-paper-notes.json` config file. Reading pi's own config is only a last-resort
 fallback for zero-config use on a pi machine; on a machine without pi that file
 does not exist and you get a clear error naming the variables to set.
 
@@ -87,7 +87,7 @@ standard, so other harnesses (Claude Code, Codex, ...) can load them.
 The scripts are shared and referenced as `../../scripts/…`, so **keep the whole
 repository present**: point the other harness at this repository's `skills/`
 directory instead of copying a single skill directory out of it — a lone
-`skills/pdf-to-obsidian/` would not find `scripts/run.py`.
+`skills/bilingual-paper-notes/` would not find `scripts/run.py`.
 
 ## Quick start
 
@@ -95,12 +95,12 @@ directory instead of copying a single skill directory out of it — a lone
 pip install -U "mineru>=4.0,<5" pymupdf
 mineru-kit models download --tier standard
 
-git clone https://github.com/Eliano64/pdf-to-obsidian
-cd pdf-to-obsidian
+git clone https://github.com/Eliano64/bilingual-paper-notes
+cd bilingual-paper-notes
 
-export PDF2MD_BASE_URL=https://api.deepseek.com/v1
-export PDF2MD_API_KEY=sk-...
-export PDF2MD_MODEL=deepseek-flash
+export BPN_BASE_URL=https://api.deepseek.com/v1
+export BPN_API_KEY=sk-...
+export BPN_MODEL=deepseek-flash
 
 python scripts/run.py paper.pdf --vault ~/Obsidian/MyVault
 ```
@@ -143,8 +143,8 @@ python scripts/run.py paper.pdf --stage render --zh-style quote
 Translation endpoint, resolved in this order:
 
 1. `--base-url` / `--api-key` / `--model`
-2. `PDF2MD_BASE_URL` / `PDF2MD_API_KEY` / `PDF2MD_MODEL` (or the `OPENAI_*` equivalents)
-3. `.pdf2obsidian.json` in the working directory, or `~/.config/pdf2obsidian/config.json`
+2. `BPN_BASE_URL` / `BPN_API_KEY` / `BPN_MODEL` (or the `OPENAI_*` equivalents)
+3. `.bilingual-paper-notes.json` in the working directory, or `~/.config/bilingual-paper-notes/config.json`
 4. pi's own provider config, if pi is installed
 
 ```json
@@ -182,7 +182,7 @@ One 92-page, equation-heavy paper, on a laptop with a mobile GPU, standard tier:
 - The note uses `![[paper.assets/…]]` and `[[paper.pdf#page=12]]`. Obsidian
   resolves both by path suffix, so the folder can live anywhere in the vault —
   as long as the PDF is inside the vault too.
-- `assets/pdf2mdzh.css` styles the 译文 callout (muted title line, tight spacing).
+- `assets/bilingual-paper-notes.css` styles the 译文 callout (muted title line, tight spacing).
   Copy it to `<vault>/.obsidian/snippets/` and enable it in Appearance.
 - PDF++ users: `--page-markers link` turns page boundaries into jump links.
 
@@ -193,7 +193,7 @@ One 92-page, equation-heavy paper, on a laptop with a mobile GPU, standard tier:
   arXiv / Crossref / Semantic Scholar.
 - Translation sends the **paper text** to whatever endpoint you configure.
   Nothing else leaves the machine, and no key is ever written by these scripts.
-- `.pdf2obsidian.json` is in `.gitignore` for that reason.
+- `.bilingual-paper-notes.json` is in `.gitignore` for that reason.
 
 ## Scope and boundaries
 
@@ -220,7 +220,7 @@ This package ships **skills only** — no pi extension, no custom tool, no slash
 command beyond the automatic `/skill:<name>` entries, and it never edits
 `~/.pi/agent/settings.json` or any other global config. The only files it
 creates are the ones listed above, inside the output directory it is given
-(plus `.pdf2obsidian/<stem>/` for Markdown input).
+(plus `.bilingual-paper-notes/<stem>/` for Markdown input).
 
 Where neighbouring skills own the task:
 

@@ -5,7 +5,7 @@
 
 No parsing is involved: the file is already Markdown, so this only segments it
 into blocks and classifies them, producing the same intermediate layer the PDF
-pipeline produces. Everything downstream (translate.py, pdf2obsidian.py --render-only,
+pipeline produces. Everything downstream (translate.py, render.py --render-only,
 verify.py) then works unchanged.
 
 Classification rules, in order:

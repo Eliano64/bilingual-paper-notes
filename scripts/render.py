@@ -772,7 +772,7 @@ def render(blocks: list[dict], meta: dict, out_dir: Path, stem: str,
         L.append(f'translator: "{meta["translated_by"]}"')
     else:
         L.append("translated: false")
-    tags = "[paper, pdf2obsidian]" if has_pages else "[note, pdf2obsidian]"
+    tags = "[paper, bilingual-paper-notes]" if has_pages else "[note, bilingual-paper-notes]"
     L.append(f"tags: {tags}")
     L.append("---")
     L.append("")

@@ -2,7 +2,7 @@
 """Stage 3: translate the translatable blocks of blocks.jsonl into Chinese.
 
 Writes "zh" (body/title/footnote) and "caption_zh" (figure/table captions) back
-into blocks.jsonl, so re-rendering is just: pdf2obsidian.py --render-only.
+into blocks.jsonl, so re-rendering is just: render.py --render-only.
 
     python translate.py out/dsh/md/blocks.jsonl --limit 20        # smoke test
     python translate.py out/dsh/md/blocks.jsonl --dry-run         # cost estimate
@@ -10,8 +10,8 @@ into blocks.jsonl, so re-rendering is just: pdf2obsidian.py --render-only.
 
 Design notes
 ------------
-* Endpoint: flags > environment (PDF2MD_* or OPENAI_*) > config file
-  (.pdf2obsidian.json) > pi's own config. No key is ever stored by this script.
+* Endpoint: flags > environment (BPN_* or OPENAI_*) > config file
+  (.bilingual-paper-notes.json) > pi's own config. No key is ever stored by this script.
 * Thinking must be disabled explicitly: DeepSeek enables it by default and
   spends the whole max_tokens budget on reasoning (measured: 60/60 tokens).
   Output tokens dominate cost, so leaving it on is a pure waste here.
@@ -142,9 +142,9 @@ def unmask(text: str, spans: list[str]) -> tuple[str, bool, bool]:
 # pi's config is consulted last so that this also works, unchanged, for people
 # who do not use pi at all.
 
-CONFIG_CANDIDATES = (".pdf2obsidian.json", "~/.config/pdf2obsidian/config.json",
-                     "~/.pdf2obsidian.json")
-ENV_PAIRS = (("PDF2MD_BASE_URL", "PDF2MD_API_KEY", "PDF2MD_MODEL"),
+CONFIG_CANDIDATES = (".bilingual-paper-notes.json", "~/.config/bilingual-paper-notes/config.json",
+                     "~/.bilingual-paper-notes.json")
+ENV_PAIRS = (("BPN_BASE_URL", "BPN_API_KEY", "BPN_MODEL"),
              ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL"))
 
 
@@ -211,13 +211,13 @@ def load_endpoint(cfg: dict, model: str | None, base_url: str | None,
     base = (base_url or base or "").rstrip("/")
     key = api_key or key
     if not base:
-        sys.exit("no API base url: pass --base-url, set PDF2MD_BASE_URL, or add it to "
+        sys.exit("no API base url: pass --base-url, set BPN_BASE_URL, or add it to "
                  + str(CONFIG_CANDIDATES[0]))
     if not key:
-        sys.exit("no API key: pass --api-key, set PDF2MD_API_KEY / OPENAI_API_KEY, "
+        sys.exit("no API key: pass --api-key, set BPN_API_KEY / OPENAI_API_KEY, "
                  "or add \"api_key\" to " + str(CONFIG_CANDIDATES[0]))
     if not model:
-        sys.exit("no model: pass --model, set PDF2MD_MODEL, or add \"model\" to "
+        sys.exit("no model: pass --model, set BPN_MODEL, or add \"model\" to "
                  + str(CONFIG_CANDIDATES[0]))
     return base, key, model
 
@@ -568,7 +568,7 @@ def read_glossary(path: Path | None) -> dict[str, str]:
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("blocks", type=Path, help="blocks.jsonl produced by pdf2obsidian.py")
+    ap.add_argument("blocks", type=Path, help="blocks.jsonl produced by render.py")
     ap.add_argument("--glossary", type=Path, default=None,
                     help="extra domain glossary; merged over the built-in one "
                          "(the built-in structural terms must stay in effect or "
@@ -578,7 +578,7 @@ def main(argv=None):
     ap.add_argument("--api-key", default=None)
     ap.add_argument("--config", type=Path, default=None,
                     help="json with base_url/api_key/model/price; defaults to "
-                         "./.pdf2obsidian.json then ~/.config/pdf2obsidian/config.json")
+                         "./.bilingual-paper-notes.json then ~/.config/bilingual-paper-notes/config.json")
     ap.add_argument("--provider", default=None,
                     help="when falling back to pi's config, which provider to use")
     ap.add_argument("--batch-units", type=int, default=5,

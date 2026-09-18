@@ -1,5 +1,5 @@
 ---
-name: pdf-to-obsidian
+name: bilingual-paper-notes
 description: Convert an English academic PDF into one bilingual Obsidian note. Extracts headings, figures, tables, equations, footnotes and references; writes Obsidian-flavoured Markdown with working cross-reference links; fills frontmatter from arXiv/Crossref (DOI, venue, year, citation count); and adds a paragraph-level Chinese translation in collapsible callouts. Use when the user wants to read, translate, summarise or annotate an English paper inside Obsidian, or asks to turn a paper PDF into Markdown. Not for creating, merging or form-filling PDFs (use the pdf skill), and not for hand-authoring Obsidian syntax (use obsidian-markdown).
 license: MIT
 compatibility: Requires Python 3.10+. Parsing needs MinerU 4.x (`pip install -U "mineru>=4.0,<5"` plus `mineru-kit models download`); PyMuPDF (`pip install pymupdf`) is optional but improves heading levels and page links. Translation needs an OpenAI-compatible endpoint and API key. Network access is used for the metadata stage. Tested on Windows and Linux.
@@ -45,7 +45,7 @@ You do not have to pre-download the models: they are fetched on the first parse,
 and `run.py` reports which store it will use before parsing starts. It resolves,
 in order:
 
-1. `--mineru-home` / `PDF2MD_MINERU_HOME`, if you set one
+1. `--mineru-home` / `BPN_MINERU_HOME`, if you set one
 2. a populated `<cwd>/.mineru`
 3. a populated `~/.mineru` (MinerU's own default)
 4. otherwise `<cwd>/.mineru`, and the first parse downloads there
@@ -64,8 +64,8 @@ If MinerU lives in another environment, use
 Translation endpoint, first match wins:
 
 ```bash
-export PDF2MD_BASE_URL=https://api.example.com/v1 PDF2MD_API_KEY=... PDF2MD_MODEL=...
-# or a config file: ./.pdf2obsidian.json, then ~/.config/pdf2obsidian/config.json
+export BPN_BASE_URL=https://api.example.com/v1 BPN_API_KEY=... BPN_MODEL=...
+# or a config file: ./.bilingual-paper-notes.json, then ~/.config/bilingual-paper-notes/config.json
 ```
 
 pi users need no key: pi's own provider config is the last fallback.
@@ -174,13 +174,13 @@ images, lost placeholders, lost formulas or failed translation.
   changed blocks are re-sent (the cache key includes the glossary).
 - Layout wrong → `--stage render` only. Free.
 - Parse quality poor → `--tier standard` instead of `basic`, then
-  `PDF2MD_FORCE_PARSE=1 --stage parse`.
+  `BPN_FORCE_PARSE=1 --stage parse`.
 
 ## Portability
 
 No pi-specific code: the scripts use the standard library plus optional PyMuPDF,
-and the endpoint comes from flags, environment variables (`PDF2MD_*` /
-`OPENAI_*`) or a `.pdf2obsidian.json` config file. Reading pi's config
+and the endpoint comes from flags, environment variables (`BPN_*` /
+`OPENAI_*`) or a `.bilingual-paper-notes.json` config file. Reading pi's config
 (`~/.pi/agent/models.json`) is only a last-resort fallback; without pi you get an
 error naming the variables to set.
 
@@ -192,12 +192,12 @@ repository's `skills/` directory rather than copying this directory out of it.
 
 ```
 scripts/run.py            orchestrator (start here)
-scripts/pdf2obsidian.py   MinerU middle_json -> blocks.jsonl -> note.md
+scripts/render.py   MinerU middle_json -> blocks.jsonl -> note.md
 scripts/translate.py      block-level translation + sqlite cache
 scripts/enrich_meta.py    arXiv / Crossref / Semantic Scholar
 scripts/verify.py         structural checks
 scripts/md2blocks.py      Markdown input entry (see the translate-markdown skill)
 scripts/glossary.txt      default glossary (keep the structural terms)
 examples/glossary.example.txt  a filled-in domain glossary
-assets/pdf2mdzh.css       Obsidian snippet that styles the 译文 callout
+assets/bilingual-paper-notes.css       Obsidian snippet that styles the 译文 callout
 ```

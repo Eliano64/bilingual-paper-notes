@@ -1,7 +1,7 @@
 {
-  "name": "pdf-to-obsidian",
+  "name": "bilingual-paper-notes",
   "version": "0.1.0",
-  "description": "Convert English academic PDFs into bilingual Obsidian notes: structure, metadata and paragraph-level translation.",
+  "description": "Convert English papers (PDF or Markdown) into bilingual Obsidian notes: preserved structure, arXiv/Crossref metadata and paragraph-level translation.",
   "keywords": [
     "pi-package",
     "pdf",

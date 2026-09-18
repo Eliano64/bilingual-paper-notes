@@ -119,8 +119,8 @@ def report_models(home: Path, why: str, tier: str, explicit: str | None, cwd: Pa
 def stage_parse(pdf: Path, out: Path, tier: str, mineru_home: str | None, mineru_cmd: str):
     parse_dir = out / "parse"
     parse_dir.mkdir(parents=True, exist_ok=True)
-    if find_middle_json(parse_dir) and not os.environ.get("PDF2MD_FORCE_PARSE"):
-        print("  parse: reusing existing output (set PDF2MD_FORCE_PARSE=1 to redo)")
+    if find_middle_json(parse_dir) and not os.environ.get("BPN_FORCE_PARSE"):
+        print("  parse: reusing existing output (set BPN_FORCE_PARSE=1 to redo)")
         return
     # MinerU often lives in its own environment (conda/venv) rather than on PATH,
     # so allow a command, not just an executable name
@@ -150,7 +150,7 @@ def stage_md(pdf: Path, out: Path, extra: list[str], note_name: str | None = Non
     mj = find_middle_json(out / "parse")
     if not mj:
         sys.exit(f"no middle_json.json under {out/'parse'} -- run --stage parse first")
-    run([sys.executable, HERE / "pdf2obsidian.py", mj, pdf, "-o", out / "md", *extra]
+    run([sys.executable, HERE / "render.py", mj, pdf, "-o", out / "md", *extra]
         + (["--note-name", note_name] if note_name else []))
 
 
@@ -163,8 +163,8 @@ def stage_md_from_markdown(source: Path, out: Path, extra: list[str], note_name:
 
 
 def markdown_work_dir(source: Path, out: Path | None = None) -> Path:
-    """Work files for a markdown source live in <source dir>/.pdf2obsidian/<stem>."""
-    return source.parent / ".pdf2obsidian" / source.stem
+    """Work files for a markdown source live in <source dir>/.bilingual-paper-notes/<stem>."""
+    return source.parent / ".bilingual-paper-notes" / source.stem
 
 
 def markdown_note_path(source: Path, note_name: str) -> Path:
@@ -175,7 +175,7 @@ def stage_render_markdown(source: Path, out: Path, extra: list[str], note_name: 
     work = markdown_work_dir(source, out)
     if not (work / "blocks.jsonl").exists():
         sys.exit("blocks.jsonl missing -- run --stage md first")
-    run([sys.executable, HERE / "pdf2obsidian.py", work / "blocks.jsonl", source,
+    run([sys.executable, HERE / "render.py", work / "blocks.jsonl", source,
          "-o", source.parent, "--blocks", work / "blocks.jsonl", "--render-only",
          "--note-name", note_name, *extra])
 
@@ -198,7 +198,7 @@ def stage_render(pdf: Path, out: Path, extra: list[str], note_name: str | None =
     mj = find_middle_json(out / "parse")
     if not mj:
         sys.exit("no middle_json.json -- run --stage parse first")
-    run([sys.executable, HERE / "pdf2obsidian.py", mj, pdf, "-o", out / "md",
+    run([sys.executable, HERE / "render.py", mj, pdf, "-o", out / "md",
          "--render-only", *extra] + (["--note-name", note_name] if note_name else []))
 
 
@@ -245,10 +245,10 @@ def main(argv=None):
     ap.add_argument("--stage", choices=("all",) + STAGES, default="all")
     ap.add_argument("--tier", default="standard",
                     help="MinerU tier: flash|basic|standard|advanced (default standard)")
-    ap.add_argument("--mineru-cmd", default=os.environ.get("PDF2MD_MINERU_CMD", "mineru-kit"),
+    ap.add_argument("--mineru-cmd", default=os.environ.get("BPN_MINERU_CMD", "mineru-kit"),
                     help="how to invoke MinerU; e.g. 'conda run -n mineru mineru-kit' "
-                         "(env PDF2MD_MINERU_CMD)")
-    ap.add_argument("--mineru-home", default=os.environ.get("PDF2MD_MINERU_HOME"),
+                         "(env BPN_MINERU_CMD)")
+    ap.add_argument("--mineru-home", default=os.environ.get("BPN_MINERU_HOME"),
                     help="where MinerU keeps models; default: a populated <cwd>/.mineru "
                          "or ~/.mineru, else <cwd>/.mineru (downloaded on first use)")
     ap.add_argument("--no-translate", action="store_true")

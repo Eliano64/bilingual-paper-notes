@@ -34,8 +34,8 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-UA = "pdf2mdzh/0.1 (https://github.com/; mailto:{mailto})"
-MAILTO = "pdf2mdzh@example.com"
+UA = "bilingual-paper-notes/0.1 (https://github.com/; mailto:{mailto})"
+MAILTO = "bilingual-paper-notes@example.com"
 SIM_ACCEPT = 0.90
 SIM_STRONG = 0.97
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
