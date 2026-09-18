@@ -1,0 +1,52 @@
+# 术语表 / glossary
+#
+# Format: one `english = 中文` per line, `#` starts a comment.
+# Pass with:  translate.py blocks.jsonl --glossary path/to/glossary.txt
+#
+# Editing this file invalidates the translation cache (the glossary is part of
+# the prompt), so the whole document is re-translated once. Settle the glossary
+# before a full run, or accept the cost (~0.2 per 90-page paper).
+#
+# Keep the terms below. The render stage turns the same cross-references into
+# wikilinks in BOTH languages, and that only works if Chinese translations use
+# these exact words followed by the number. If you drop them, cross-references
+# in the translated half of the note silently stop being clickable.
+
+theorem = 定理
+lemma = 引理
+definition = 定义
+corollary = 推论
+proposition = 命题
+remark = 备注
+figure = 图
+table = 表
+algorithm = 算法
+section = 节
+appendix = 附录
+equation = 公式
+
+# --- generic academic vocabulary -----------------------------------------
+# Add your own field's terms; keep one spelling per concept or the translation
+# will drift between sections.
+abstract = 摘要
+introduction = 引言
+related work = 相关工作
+conclusion = 结论
+acknowledgements = 致谢
+proof = 证明
+invariant = 不变量
+baseline = 基线
+ablation = 消融
+benchmark = 基准
+dataset = 数据集
+hyperparameter = 超参数
+embedding = 嵌入
+gradient = 梯度
+transformer = Transformer
+fine-tuning = 微调
+state of the art = 当前最优
+contribution = 贡献
+performance = 性能
+accuracy = 准确率
+latency = 延迟
+throughput = 吞吐量

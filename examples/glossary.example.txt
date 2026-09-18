@@ -1,0 +1,82 @@
+# 领域术语表示例：编程语言 / 类型论 / 运行时
+#
+# This is the glossary used while developing this package, against a PL paper on
+# effect and coeffect systems. It shows how far a domain glossary should go: the
+# point is not to translate every word, but to pin down the vocabulary the paper
+# keeps re-using, so one concept never appears under two different Chinese words.
+#
+#   run.py paper.pdf --glossary examples/glossary.example.txt
+#
+# This file is MERGED over the built-in scripts/glossary.txt, which carries the
+# structural terms (theorem, figure, section, ...). Merging means you never have
+# to repeat those, and you cannot accidentally drop them by passing a glossary
+# that does not mention them.
+
+# --- effect / coeffect systems -------------------------------------------
+effect = 效应
+coeffect = 余效应
+revertible effect = 可逆效应
+reactive coeffect = 反应式余效应
+effect function = 效应函数
+effect iterator = 效应迭代器
+effect context = 效应上下文
+coeffect context = 余效应上下文
+coeffect specification = 余效应规约
+coeffect algebra = 余效应代数
+graded coeffect = 分级余效应
+effect handler = 效应处理器
+effect tracking = 效应追踪
+inverse = 逆
+accumulator = 累加器
+witness = 见证
+witnessed = 带见证的
+soundness invariant = 可靠性不变量
+recovery = 恢复
+
+# --- type theory / category theory ---------------------------------------
+monad = 单子
+comonad = 余单子
+typing judgment = 类型判断
+simply typed lambda calculus = 简单类型 lambda 演算
+delimited continuation = 定界续延
+observational equivalence = 观测等价
+semiring = 半环
+refinement = 精化
+metatheory = 元理论
+commutativity = 交换性
+induction = 归纳
+coinduction = 余归纳
+
+# --- runtime / implementation --------------------------------------------
+component = 组件
+fiber = 纤程
+registry = 注册表
+orchestrator = 编排器
+orchestration = 编排
+instantiation = 实例化
+lifecycle = 生命周期
+inertial = 惯性
+quiescent = 静息
+activation = 激活
+deactivation = 去激活
+provider = 提供者
+dependent = 依赖项
+committed view = 已提交视图
+target view = 目标视图
+configuration reconciliation = 配置对账
+hot module replacement = 热模块替换
+loader = 加载器
+disposer = 清理函数
+confinement = 限定
+interleaving = 交错
+isolation = 隔离
+interception = 拦截
+side effect = 副作用
+
+# --- keep as-is (products, code, coined names) ---------------------------
+# Naming a term in both columns tells the model "do not translate this".
+track/recover = track/recover
+plugin = plugin
+TypeScript = TypeScript
+Node.js = Node.js
+Kubernetes = Kubernetes

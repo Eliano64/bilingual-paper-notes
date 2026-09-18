@@ -1,0 +1,40 @@
+/* pdf2mdzh — 译文 callout 的样式
+ *
+ * 用法：复制到 <vault>/.obsidian/snippets/pdf2mdzh.css，
+ *       然后在 Obsidian 设置 → 外观 → CSS 代码片段 里启用。
+ * 不装也能正常阅读，只是译文会用它默认的灰色 callout 样式。
+ */
+
+.callout[data-callout="zh"] {
+	--callout-color: 128, 128, 140;
+	--callout-icon: lucide-languages;
+	--callout-padding: 6px 12px 6px 10px;
+	font-size: 0.95em;
+	/* 紧贴上方英文段落，让中英成对而不是两段独立内容 */
+	margin-top: -4px;
+	margin-bottom: 1.2em;
+}
+
+/* 标题行弱化：它是每段都重复的"译文"，不该抢视线 */
+.callout[data-callout="zh"] .callout-title {
+	font-size: 0.82em;
+	opacity: 0.65;
+}
+
+/* 折叠态下没有内容，去掉多余的下边距 */
+.callout[data-callout="zh"].is-collapsed {
+	margin-bottom: 0.8em;
+}
+
+.callout[data-callout="zh"] .callout-content > :first-child {
+	margin-top: 0;
+}
+
+.callout[data-callout="zh"] .callout-content > :last-child {
+	margin-bottom: 0;
+}
+
+/* 译文里的公式和英文术语会与中文混排，稍微放开行高 */
+.callout[data-callout="zh"] .callout-content {
+	line-height: 1.75;
+}

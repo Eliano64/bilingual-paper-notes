@@ -1,0 +1,24 @@
+{
+  "name": "pdf-to-obsidian",
+  "version": "0.1.0",
+  "description": "Convert English academic PDFs into bilingual Obsidian notes: structure, metadata and paragraph-level translation.",
+  "keywords": [
+    "pi-package",
+    "pdf",
+    "markdown",
+    "obsidian",
+    "translation",
+    "mineru"
+  ],
+  "license": "MIT",
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  },
+  "files": [
+    "skills",
+    "README.md",
+    "LICENSE"
+  ]
+}

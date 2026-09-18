@@ -1,0 +1,14 @@
+# --- local work, never published -----------------------------------------
+
+# --- secrets: the config file holds an API key ---------------------------
+.pdf2obsidian.json
+.pdf2obsidian/
+config.local.json
+
+# --- generated -----------------------------------------------------------
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+__pycache__/
+*.pyc
+.venv/
