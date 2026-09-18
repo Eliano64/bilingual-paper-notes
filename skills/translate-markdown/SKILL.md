@@ -1,6 +1,6 @@
 ---
 name: translate-markdown
-description: Turn an English Markdown note into a bilingual Obsidian note. Adds a paragraph-level Chinese translation in collapsible callouts while leaving headings, code, tables, equations, references and the author's own wikilinks untouched. Use when the user wants an existing .md note translated, wants English notes readable bilingually in Obsidian, or has a paper's Markdown source (rather than a PDF) to translate. Not for PDF input (use bilingual-paper-notes) and not for authoring or fixing Obsidian syntax itself (use obsidian-markdown).
+description: Turn an English Markdown note into a bilingual Obsidian note. Adds a paragraph-level Chinese translation in collapsible callouts while leaving headings, code, tables, equations, references and the author's own wikilinks untouched. Use when the user wants an existing .md note translated, wants English notes readable bilingually in Obsidian, or has a paper's Markdown source (rather than a PDF) to translate. Not for PDF input (use pdf-to-obsidian) and not for authoring or fixing Obsidian syntax itself (use obsidian-markdown).
 license: MIT
 compatibility: Requires Python 3.10+. No PDF tooling involved. Translation needs an OpenAI-compatible endpoint and API key (BPN_* or OPENAI_* environment variables, a .bilingual-paper-notes.json config file, or pi's own provider config). Tested on Windows and Linux.
 ---
@@ -22,7 +22,7 @@ code the PDF pipeline uses.
 | Input | Status |
 |---|---|
 | English prose notes, paper Markdown sources, exported articles | Supported |
-| PDFs | Use `bilingual-paper-notes` instead; this path does no extraction. |
+| PDFs | Use `pdf-to-obsidian` instead; this path does no extraction. |
 | Notes with images referenced relatively | Supported: the note is written **beside its source**, so relative links keep working. |
 | Obsidian syntax authoring/repair | Use `obsidian-markdown`. |
 

@@ -1,5 +1,5 @@
 ---
-name: bilingual-paper-notes
+name: pdf-to-obsidian
 description: Convert an English academic PDF into one bilingual Obsidian note. Extracts headings, figures, tables, equations, footnotes and references; writes Obsidian-flavoured Markdown with working cross-reference links; fills frontmatter from arXiv/Crossref (DOI, venue, year, citation count); and adds a paragraph-level Chinese translation in collapsible callouts. Use when the user wants to read, translate, summarise or annotate an English paper inside Obsidian, or asks to turn a paper PDF into Markdown. Not for creating, merging or form-filling PDFs (use the pdf skill), and not for hand-authoring Obsidian syntax (use obsidian-markdown).
 license: MIT
 compatibility: Requires Python 3.10+. Parsing needs MinerU 4.x (`pip install -U "mineru>=4.0,<5"` plus `mineru-kit models download`); PyMuPDF (`pip install pymupdf`) is optional but improves heading levels and page links. Translation needs an OpenAI-compatible endpoint and API key. Network access is used for the metadata stage. Tested on Windows and Linux.

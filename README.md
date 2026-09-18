@@ -58,14 +58,14 @@ Or clone it and call the scripts directly — nothing here imports pi:
 
 ```bash
 python scripts/run.py paper.pdf
-python skills/bilingual-paper-notes/SKILL.md    # what an agent reads
+python skills/pdf-to-obsidian/SKILL.md    # what an agent reads
 ```
 
 ## Two skills, one code base
 
 | Skill | Input | Entry point |
 |---|---|---|
-| `bilingual-paper-notes` | an English paper PDF | `scripts/run.py paper.pdf` |
+| `pdf-to-obsidian` | an English paper PDF | `scripts/run.py paper.pdf` |
 | `translate-markdown` | an English `.md` note | `scripts/run.py note.md` |
 
 Both share `scripts/` and the same intermediate layer (`blocks.jsonl`), so
@@ -87,7 +87,7 @@ standard, so other harnesses (Claude Code, Codex, ...) can load them.
 The scripts are shared and referenced as `../../scripts/…`, so **keep the whole
 repository present**: point the other harness at this repository's `skills/`
 directory instead of copying a single skill directory out of it — a lone
-`skills/bilingual-paper-notes/` would not find `scripts/run.py`.
+`skills/pdf-to-obsidian/` would not find `scripts/run.py`.
 
 ## Quick start
 
