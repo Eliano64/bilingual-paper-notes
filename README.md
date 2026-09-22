@@ -46,28 +46,6 @@ warns with both paths rather than downloading 2 GB quietly. If MinerU lives in
 another environment, point the pipeline at it with
 `--mineru-cmd 'conda run -n mineru mineru-kit'`.
 
-### GPU and VRAM
-
-No CUDA setup and no configuration are needed. MinerU's own VLM backend offloads
-all layers to the GPU whenever it finds a usable device, and the build it ships
-registers a **Vulkan** backend — there is no CUDA backend in that package, so
-installing CUDA or PyTorch changes nothing. Expect about **1 GB of VRAM** to be
-held while the VLM is loaded (measured on an 8 GB mobile GPU: 7.2 GB still free),
-so account for it if you run another GPU job at the same time. A GPU is optional:
-without one the same work runs on the CPU, only slower.
-
-The small models MinerU runs alongside the VLM (layout, formula, OCR, table)
-**always execute on the CPU** — the ONNX Runtime provider is pinned to
-`CPUExecutionProvider`, so `onnxruntime-gpu` gains nothing. Their thread count is
-the one knob worth tuning: `MINERU_INTRA_OP_NUM_THREADS` and
-`MINERU_INTER_OP_NUM_THREADS`. A fast CPU therefore matters as much as the GPU.
-
-To confirm which device your machine picked, load the VLM once at debug
-verbosity (`mineru_llama_cpp.Engine(main_gguf, mmproj_gguf,
-verbosity=LOG_LEVEL_DEBUG)`); the default level prints nothing about devices. To
-put a CUDA server in place of the bundled backend, point MinerU at it with
-`model.vlm.server_url` — the GPU becomes that server's concern.
-
 ## Install
 
 As a pi package (installs both skills and a small update check):
@@ -207,7 +185,7 @@ One 92-page, equation-heavy paper, on a laptop with a mobile GPU, standard tier:
 
 | | |
 |---|---|
-| Parse | 358 s (MinerU: VLM on the GPU, small models on the CPU) |
+| Parse | 358 s (MinerU, VLM pass) |
 | Translate | 124 s, ~0.16, 731 blocks, 0 failures |
 | Re-render | instant, free |
 | Re-translate after a glossary edit | full run, cached blocks are skipped |
