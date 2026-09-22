@@ -14,10 +14,14 @@
   "pi": {
     "skills": [
       "./skills"
+    ],
+    "extensions": [
+      "./extensions"
     ]
   },
   "files": [
     "skills",
+    "extensions",
     "README.md",
     "LICENSE"
   ]

@@ -70,7 +70,7 @@ put a CUDA server in place of the bundled backend, point MinerU at it with
 
 ## Install
 
-As a pi package (installs both skills):
+As a pi package (installs both skills and a small update check):
 
 ```bash
 pi install git:github.com/Eliano64/bilingual-paper-notes
@@ -82,6 +82,19 @@ Or clone it and call the scripts directly — nothing here imports pi:
 python scripts/run.py paper.pdf
 python skills/pdf-to-obsidian/SKILL.md    # what an agent reads
 ```
+
+### Staying up to date
+
+`pi update --extensions` is the only thing that moves an installed git package
+forward: pi does not look for updates by itself, and it never moves a package
+that was installed with a pinned `@ref`. So this package checks for you. At
+session start the bundled extension (`extensions/update-check.ts`) compares the
+installed revision against the remote one and, when they differ, shows a notice
+and a footer status pointing at that command.
+
+It compares at most once every six hours, and the comparison is read-only —
+nothing is fetched into the clone and no checkout is touched. Once your copy is
+current it goes quiet on its own. Set `BPN_NO_UPDATE_CHECK` to switch it off.
 
 ## Two skills, one code base
 
