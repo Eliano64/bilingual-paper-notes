@@ -399,15 +399,15 @@ def creators_from_front(authors, front_text: list[str],
         if not name:
             continue
         line = next((t for t in front_text if name.lower() in t.lower()), "")
-        suffix = None
-        if line:
-            own = [a for a in affiliations if a.lower() in line.lower()]
-            if own:
-                suffix = own[0]
-            if email and email in line:
-                suffix = f"{suffix}, {email}" if suffix else email
-        if suffix is None and len(affiliations) == 1:
-            suffix = affiliations[0]
+        # the institution this author's own line states, or the only one the paper
+        # has; never one picked by position
+        own = [a for a in affiliations if line and a.lower() in line.lower()]
+        if own:
+            affiliation = own[0]
+        else:
+            affiliation = affiliations[0] if len(affiliations) == 1 else None
+        address = email if (email and line and email in line) else None
+        suffix = ", ".join(x for x in (affiliation, address) if x)
         if suffix:
             out.append({"creatorType": "author", "name": f"{name} ({suffix})"})
             continue

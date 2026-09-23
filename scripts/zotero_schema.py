@@ -111,7 +111,11 @@ def known(schema: dict, item_type: str) -> bool:
 
 
 def allowed_fields(schema: dict, item_type: str) -> set:
-    """The fields Zotero allows on this item type. An unknown type allows nothing."""
+    """The fields Zotero allows on this item type. An unknown type allows nothing.
+
+    This is a set, so it answers "may this field be here", not "in what order" —
+    for Zotero's own field order, read the snapshot's list.
+    """
     return set(schema["itemTypes"].get(item_type, {}).get("fields", []))
 
 
