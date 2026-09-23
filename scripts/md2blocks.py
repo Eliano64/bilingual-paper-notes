@@ -163,16 +163,17 @@ def convert(md_path: Path, out: Path) -> tuple[list[dict], dict]:
                 title = b["text"]
                 break
     meta = {
-        "source_pdf": None,
-        "source_md": str(md_path),
+        # A markdown note is not a bibliographic record, so the item is a plain
+        # Zotero document. enrich_meta replaces it once the note is identified.
+        "item": {
+            "itemType": "document",
+            "title": title or md_path.stem,
+        },
         "source_kind": "markdown",
         "stem": md_path.stem,
         "page_count": None,
-        "document": {"title": title or md_path.stem},
-        "title_pdf": title or "",
         "outline": [],
         "toc_pages": [],
-        "affiliations": [],
         "block_count": len(blocks),
         "warnings": warnings,
         "xref": False,          # do not rewrite the author's own [12] citations
@@ -196,7 +197,7 @@ def main(argv=None):
     for b in blocks:
         counts[b["type"]] = counts.get(b["type"], 0) + 1
     print(f"blocks : {len(blocks)}  {counts}")
-    print(f"title  : {meta['document']['title']!r}")
+    print(f"title  : {meta['item']['title']!r}")
     print(f"units  : {sum(1 for b in blocks if b['translatable'])} translatable")
     for w in meta["warnings"][:5]:
         print("  -", w)

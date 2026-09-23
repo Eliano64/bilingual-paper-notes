@@ -35,7 +35,7 @@ def find_note(blocks_path: Path, explicit: Path | None) -> Path | None:
     if meta_path.exists():
         try:
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
-            stem = meta.get("stem") or Path(meta.get("source_pdf") or "").stem or None
+            stem = meta.get("stem") or None
         except Exception:
             pass
     cands = sorted(blocks_path.parent.glob("*.md"))
@@ -139,6 +139,28 @@ def main(argv=None):
         info.append(f"{len(dup)} blocks where the model repeated a placeholder while "
                     f"rephrasing (accepted, worth a look): {dup[:6]}")
 
+    # ---- metadata --------------------------------------------------------
+    # The metadata is a Zotero item; a field its type does not allow is a broken
+    # contract, not a style question, so it fails here.
+    meta_path = blocks_path.parent / "meta.json"
+    if meta_path.exists():
+        try:
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from zotero_schema import load as _load_schema, validate_item
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            item = meta.get("item") or {}
+            problems = validate_item(_load_schema(), item)
+            if problems:
+                hard.append("metadata is outside Zotero's model: " + "; ".join(problems[:4]))
+            else:
+                info.append(f"metadata: a {item.get('itemType')} item, "
+                            f"{len([k for k in item if k != 'itemType'])} field(s), "
+                            "all allowed by that type")
+        except Exception as e:
+            warn.append(f"metadata could not be checked: {type(e).__name__}: {e}")
+    else:
+        warn.append("no meta.json next to blocks.jsonl, metadata not checked")
+
     counts: dict[str, int] = {}
     for b in blocks:
         counts[b["type"]] = counts.get(b["type"], 0) + 1
@@ -151,8 +173,6 @@ def main(argv=None):
     if meta_path.exists():
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         toc_pages = set(meta.get("toc_pages") or [])
-        if pdf is None and meta.get("source_pdf"):
-            pdf = Path(meta["source_pdf"])
     if pdf and Path(pdf).exists():
         try:
             import pymupdf

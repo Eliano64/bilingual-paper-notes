@@ -180,11 +180,12 @@ def stage_render_markdown(source: Path, out: Path, extra: list[str], note_name: 
          "--note-name", note_name, *extra])
 
 
-def stage_meta(out: Path):
+def stage_meta(out: Path, pdf: Path | None, extra: list[str]):
     meta = out / "md" / "meta.json"
     if not meta.exists():
         sys.exit("meta.json missing -- run --stage md first")
-    run([sys.executable, HERE / "enrich_meta.py", meta])
+    run([sys.executable, HERE / "enrich_meta.py", meta]
+        + (["--pdf", str(pdf)] if pdf else []) + list(extra))
 
 
 def stage_translate(out: Path, extra: list[str], blocks_path: Path | None = None):
@@ -259,8 +260,14 @@ def main(argv=None):
                     choices=("callout-open", "callout-folded", "quote"))
     ap.add_argument("--model", default=None)
     ap.add_argument("--config", type=Path, default=None)
-    ap.add_argument("--page-markers", default="none",
-                    choices=("comment", "link", "none"))
+    ap.add_argument("--zotero-library", default=os.environ.get("ZOTERO_LIBRARY"),
+                    help='read this library instead of the key owner\'s personal one, '
+                         'e.g. "users/123" or "groups/456"')
+    ap.add_argument("--zotero-key", default=None,
+                    help="Zotero API key (env ZOTERO_API_KEY, or the 'zotero' section of "
+                         ".bilingual-paper-notes.json); see ZOTERO.md")
+    ap.add_argument("--no-zotero", action="store_true",
+                    help="do not consult a Zotero library; read arXiv and Crossref only")
     ap.add_argument("--block-anchors", action="store_true")
     args = ap.parse_args(argv)
 
@@ -287,9 +294,16 @@ def main(argv=None):
         todo = list(STAGES) if args.stage == "all" else [args.stage]
     work.mkdir(parents=True, exist_ok=True)
 
-    render_flags = ["--zh-style", args.zh_style, "--page-markers", args.page_markers]
+    render_flags = ["--zh-style", args.zh_style]
     if args.block_anchors:
         render_flags.append("--block-anchors")
+    meta_flags = []
+    if args.no_zotero:
+        meta_flags.append("--no-zotero")
+    if args.zotero_key:
+        meta_flags += ["--zotero-key", args.zotero_key]
+    if args.zotero_library:
+        meta_flags += ["--zotero-library", args.zotero_library]
     translate_flags = []
     if args.glossary:
         translate_flags += ["--glossary", str(args.glossary)]
@@ -318,7 +332,7 @@ def main(argv=None):
                 stage_md(source, out, render_flags, note_name)
         elif s == "meta":
             if not is_markdown:
-                stage_meta(out)
+                stage_meta(out, source, meta_flags)
         elif s == "translate":
             stage_translate(work, translate_flags, blocks_path=work / "blocks.jsonl")
         elif s == "render":

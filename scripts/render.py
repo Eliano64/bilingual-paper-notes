@@ -360,6 +360,64 @@ def extract_affiliations(front_text: list[str]) -> list[str]:
     return out
 
 
+EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+")
+
+
+def _corresponding_email(front_text: list[str]) -> str | None:
+    """The correspondence address, when the front block makes it unambiguous.
+
+    Per-author addresses are not recoverable from a paper's title block, so this
+    only answers for the one address a paper usually prints, and only when it is
+    named as the correspondence one or is the only address present.
+    """
+    found = [m.group(0) for t in front_text for m in EMAIL_RE.finditer(t)]
+    found = list(dict.fromkeys(found))
+    if len(found) == 1:
+        return found[0]
+    for t in front_text:
+        if re.search(r"correspond\w*|通讯作者", t, re.I):
+            m = EMAIL_RE.search(t)
+            if m:
+                return m.group(0)
+    return None
+
+
+def creators_from_front(authors, front_text: list[str],
+                        affiliations: list[str]) -> list[dict]:
+    """Zotero creators from the title block, with the affiliations we can pair.
+
+    The pairing follows two rules and never guesses: an author whose own line
+    states an institution keeps it, and a paper with exactly one affiliation
+    gives it to every author. Anything else stays unsuffixed, because matching
+    institutions to people by position is how a wrong affiliation gets in. The
+    correspondence address is added only to the author it is printed next to.
+    """
+    email = _corresponding_email(front_text)
+    out: list[dict] = []
+    for raw in authors or []:
+        name = re.sub(r"\s+", " ", str(raw)).strip()
+        if not name:
+            continue
+        line = next((t for t in front_text if name.lower() in t.lower()), "")
+        suffix = None
+        if line:
+            own = [a for a in affiliations if a.lower() in line.lower()]
+            if own:
+                suffix = own[0]
+            if email and email in line:
+                suffix = f"{suffix}, {email}" if suffix else email
+        if suffix is None and len(affiliations) == 1:
+            suffix = affiliations[0]
+        if suffix:
+            out.append({"creatorType": "author", "name": f"{name} ({suffix})"})
+            continue
+        parts = name.split()
+        out.append({"creatorType": "author",
+                    "firstName": " ".join(parts[:-1]),
+                    "lastName": parts[-1]})
+    return out
+
+
 def normalize(middle_json: Path, pdf_path: Path, out_dir: Path,
               stem: str) -> tuple[list[dict], dict]:
     data = json.loads(middle_json.read_text(encoding="utf-8"))
@@ -545,13 +603,22 @@ def normalize(middle_json: Path, pdf_path: Path, out_dir: Path,
     document = dict(data.get("metadata", {}).get("document", {}) or {})
     if not document.get("title") and doc_title_block:
         document["title"] = doc_title_block
+    affiliations = extract_affiliations(front_text)
+    authors = document.get("authors") or []
+    if authors and isinstance(authors[0], str) and "," in authors[0]:
+        authors = [a.strip() for a in authors[0].split(",")]
     meta = {
-        "source_pdf": str(pdf_path),
+        # The metadata is a Zotero item. Every other key in this file is pipeline
+        # state, and none of it reaches the note.
+        "item": {
+            "itemType": "journalArticle",   # replaced once the document is identified
+            "title": document.get("title") or stem,
+            "creators": creators_from_front(authors, front_text, affiliations),
+        },
         "page_count": pdf_page_count(pdf_path),
         "stem": stem,
+        "source_kind": "pdf",
         "parser": data.get("metadata", {}).get("producer", {}),
-        "document": document,
-        "title_pdf": document.get("title") or "",
         "doc_title_block": doc_title_block,
         "block_count": len(blocks),
         "warnings": warnings,
@@ -560,7 +627,6 @@ def normalize(middle_json: Path, pdf_path: Path, out_dir: Path,
         "titles_not_in_outline": unmatched_titles if toc_map else [],
         "front_text": front_text,
         "aside_text": aside_text,
-        "affiliations": extract_affiliations(front_text),
         "toc_pages": sorted(toc_pages),
         "is_full_document": data.get("is_full_document", False),
     }
@@ -738,42 +804,63 @@ def linkify(text: str, tg: dict) -> str:
     return "".join(p if i % 2 else _linkify_plain(p, tg) for i, p in enumerate(parts))
 
 
+_ZOTERO_SCHEMA: dict | None = None
+
+
+def zotero_fields(item_type: str) -> list[str]:
+    """The fields Zotero allows on this item type, in Zotero's own order."""
+    global _ZOTERO_SCHEMA
+    if _ZOTERO_SCHEMA is None:
+        try:
+            from zotero_schema import load as _load
+            _ZOTERO_SCHEMA = _load()
+        except Exception:
+            _ZOTERO_SCHEMA = {}
+    return list(_ZOTERO_SCHEMA.get("itemTypes", {}).get(item_type, {}).get("fields", []))
+
+
+def frontmatter(item: dict) -> list[str]:
+    """The note's properties: the fields of a Zotero item, in Zotero's order.
+
+    A field the item's type does not allow is dropped here rather than written,
+    so the properties can never drift outside Zotero's model; verify.py reports
+    what was dropped.
+    """
+    item_type = item.get("itemType") or "document"
+    out = [f"itemType: {item_type}"]
+    if item.get("title"):
+        out.append(f"title: {json.dumps(item['title'], ensure_ascii=False)}")
+    creators = item.get("creators") or []
+    if creators:
+        out.append("creators:")
+        for c in creators:
+            out.append(f"  - creatorType: {c.get('creatorType', 'author')}")
+            if c.get("name"):
+                out.append(f"    name: {json.dumps(c['name'], ensure_ascii=False)}")
+            else:
+                out.append(f"    firstName: {json.dumps(c.get('firstName') or '', ensure_ascii=False)}")
+                out.append(f"    lastName: {json.dumps(c.get('lastName') or '', ensure_ascii=False)}")
+    for field in zotero_fields(item_type):
+        if field in ("title",):
+            continue
+        value = item.get(field)
+        if value in (None, "", []):
+            continue
+        out.append(f"{field}: {json.dumps(value, ensure_ascii=False)}")
+    return out
+
+
 def render(blocks: list[dict], meta: dict, out_dir: Path, stem: str,
-           page_markers: str = "none", block_anchors: bool = False,
+           block_anchors: bool = False,
            outline_nav: bool = False, xref: bool = True,
            zh_style: str = "callout-open") -> tuple[str, dict]:
-    # the source can be a PDF (page links make sense) or a markdown note
-    src = meta.get("source_pdf") or meta.get("source_md") or ""
-    pdf_name = Path(src).name if src else ""
-    has_pages = bool(meta.get("source_pdf"))
     L: list[str] = []
-    doc = meta.get("document", {})
-    authors = doc.get("authors") or []
-    if authors and isinstance(authors[0], str) and "," in authors[0]:
-        authors = [a.strip() for a in authors[0].split(",")]
-
-    def yaml_list(vals):
-        return "[" + ", ".join(f'"{v}"' for v in vals) + "]"
+    item = meta.get("item") or {}
 
     L.append("---")
-    L.append(f'title: "{doc.get("title", stem)}"')
-    if authors:
-        L.append(f"authors: {yaml_list(authors)}")
-    for key, field in (("venue", "venue"), ("year", "year"), ("arxiv", "arxiv"),
-                       ("doi", "doi"), ("url", "url"), ("citations", "citations"),
-                       ("citations_asof", "citations_asof")):
-        if meta.get(field) not in (None, ""):
-            L.append(f"{key}: {json.dumps(meta[field], ensure_ascii=False)}")
-    if meta.get("affiliations"):
-        L.append(f"affiliations: {yaml_list(meta['affiliations'])}")
-    L.append(f'source_pdf: "[[{pdf_name}]]"' if has_pages else f'source: "[[{pdf_name}]]"')
-    if meta.get("translated_by"):
-        L.append("translated: true")
-        L.append(f'translator: "{meta["translated_by"]}"')
-    else:
-        L.append("translated: false")
-    tags = "[paper, bilingual-paper-notes]" if has_pages else "[note, bilingual-paper-notes]"
-    L.append(f"tags: {tags}")
+    L.extend(frontmatter(item))
+    L.append(f"tags: [{('note' if meta.get('source_kind') == 'markdown' else 'paper')}, "
+             "bilingual-paper-notes]")
     L.append("---")
     L.append("")
 
@@ -782,27 +869,13 @@ def render(blocks: list[dict], meta: dict, out_dir: Path, stem: str,
         L.append("")
         for lvl, title, page in meta["outline"]:
             indent = "  " * max(0, lvl - 1)
-            link = f"[[{pdf_name}#page={page}]]"
-            L.append(f"{indent}- {title} {link}")
+            L.append(f"{indent}- {title}")
         L.append("")
 
     tg = collect_targets(blocks) if xref else None
-    cur_page = None
     footnotes: list[tuple[str, str]] = []
     footnotes_zh: dict[str, str] = {}
     for rec in blocks:
-        page = rec["page"]
-        if page_markers != "none" and has_pages and page is not None and page != cur_page:
-            if page_markers == "link":
-                L.append("")
-                L.append(f"[[{pdf_name}#page={page + 1}|▸ p.{page + 1}]]")
-                L.append("")
-            else:
-                L.append("")
-                L.append(f"<!-- p.{page + 1} -->")
-                L.append("")
-            cur_page = page
-
         aid = anchor_of(rec, tg) if tg else ""
         anchor = f" ^{aid}" if aid else ""
         if not aid and block_anchors:
@@ -947,7 +1020,6 @@ def main(argv=None):
                     help="read blocks.jsonl/meta.json from here and write the note into "
                          "--out; lets the note live beside its source (Markdown input) "
                          "while work files stay elsewhere")
-    ap.add_argument("--page-markers", choices=["comment", "link", "none"], default="none")
     ap.add_argument("--block-anchors", action="store_true",
                     help="also give every block a ^b-xxxxxx id (noisy; off by default)")
     ap.add_argument("--outline", action="store_true",
@@ -1007,7 +1079,6 @@ def main(argv=None):
                 meta["warnings"].append(f"missing asset {src}")
 
     md, xstats = render(blocks, meta, out, stem,
-                        page_markers=args.page_markers,
                         block_anchors=args.block_anchors,
                         outline_nav=args.outline,
                         xref=(not args.no_xref) and bool(meta.get("xref", True)),

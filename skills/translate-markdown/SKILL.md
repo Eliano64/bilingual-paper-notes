@@ -28,6 +28,11 @@ code the PDF pipeline uses.
 
 ## Usage
 
+Metadata is not looked up for Markdown input: there is no document to identify,
+so the pipeline keeps the note's own properties and only segments, translates and
+renders it. (Identifiers, arXiv/Crossref lookup and Zotero all apply to PDF input
+through the `pdf-to-obsidian` skill.)
+
 ```bash
 python ../../scripts/run.py note.md                    # all stages
 python ../../scripts/run.py note.md --no-translate     # segmentation only

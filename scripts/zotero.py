@@ -264,12 +264,13 @@ class Client:
             return None, err
         return data, None
 
-    def by_identifier(self, doi=None, isbn=None, arxiv=None, item_types=None):
-        """Look a record up by an identifier and verify the match locally.
+    def by_identifier(self, doi=None, isbn=None, arxiv=None, title=None, item_types=None):
+        """Look a record up by an identifier, or by an exact title.
 
-        Returns (item, error). Matching happens on identifiers we can compare
-        exactly, never on a fuzzy score: that is the whole reason to consult a
-        library instead of a title search.
+        Returns (item, error). Identifiers are compared exactly, and a title only
+        counts when it matches the record's own title once normalised - never on a
+        similarity score. That is the whole reason to consult a library instead of
+        a title search: it either knows the work or it does not.
         """
         want = []
         if doi:
@@ -278,7 +279,7 @@ class Client:
             want.append(("ISBN", _normalize_isbn(isbn)))
         if arxiv:
             want.append(("arXiv", re.sub(r"^arxiv:", "", arxiv.strip(), flags=re.I).lower()))
-        if not want:
+        if not want and not title:
             return None, "no identifier given"
 
         summaries, err = self.scan(item_types)
@@ -292,8 +293,22 @@ class Client:
                     return self.fetch(s["key"])
                 if kind == "arXiv" and value and value == (s.get("archiveID") or "").lower():
                     return self.fetch(s["key"])
-        return None, (f"no item in the library carries {want[0][0]} {want[0][1]}"
-                      f" (scanned {len(summaries)} records)")
+        if want:
+            miss = f"no item in the library carries {want[0][0]} {want[0][1]}"
+        else:
+            miss = "no identifier was available"
+
+        if title:
+            wanted = re.sub(r"\W+", " ", title.lower()).strip()
+            same = [s for s in summaries
+                    if re.sub(r"\W+", " ", (s.get("title") or "").lower()).strip() == wanted
+                    and wanted]
+            if len(same) == 1:
+                return self.fetch(same[0]["key"])
+            if len(same) > 1:
+                keys = ", ".join(str(s["key"]) for s in same[:4])
+                return None, f"{len(same)} library items have this exact title ({keys})"
+        return None, f"{miss}; no exact title match either (scanned {len(summaries)} records)"
 
     def candidates(self, item_types=None):
         """Every scanned summary, for a caller that wants to score titles itself."""

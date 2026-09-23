@@ -70,6 +70,33 @@ export BPN_BASE_URL=https://api.example.com/v1 BPN_API_KEY=... BPN_MODEL=...
 
 pi users need no key: pi's own provider config is the last fallback.
 
+## Metadata source (Zotero)
+
+The note's properties are a Zotero item: field names and the fields an item type
+allows come from Zotero's schema (`scripts/data/zotero-schema.json`), and
+`enrich_meta.py` validates the result against it. Nothing outside that model is
+written to the note.
+
+Metadata is read, in order, from a Zotero library (when a key is configured),
+the identifiers printed on the PDF, arXiv, and Crossref. A library record that
+matches an identifier exactly is authoritative — which is the point: it needs no
+title matching, so it cannot land on the wrong record.
+
+When the user wants their library used, or says an author / venue / year is
+wrong:
+
+1. Check whether a key is configured: `python scripts/zotero.py --whoami`.
+2. If it prints setup instructions instead, walk them through **ZOTERO.md** (or
+   `python scripts/zotero.py --guide`): the key goes in
+   `.bilingual-paper-notes.json` under `"zotero": {"api_key": "..."}`, created
+   at <https://www.zotero.org/settings/keys/new> with read access only.
+3. Never ask for their Zotero password — an API key is what that is for, and it
+   can be limited and revoked. Never print the key back, and never write it into
+   a tracked file: the config file is gitignored here for that reason.
+
+`--no-zotero` skips the library for a run; without a key nothing breaks, because
+arXiv and Crossref fill the same fields.
+
 ## Usage
 
 ```bash

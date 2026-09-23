@@ -162,6 +162,9 @@ Translation endpoint, resolved in this order:
 
 ### Zotero (optional)
 
+Step-by-step instructions, including creating the key and troubleshooting:
+**[ZOTERO.md](ZOTERO.md)**.
+
 Metadata comes out shaped like a Zotero item. If the paper is already in your
 Zotero library, that library is the better source: it is authoritative, needs no
 title matching, and returns exactly the fields Zotero defines. It is read
