@@ -34,6 +34,8 @@ and the cross-references coherent.
   `pip install -U "mineru>=4.0,<5"`, then `mineru-kit models download --tier standard`
 - PyMuPDF (`pip install pymupdf`) — optional, improves heading levels and page links
 - An OpenAI-compatible endpoint + API key for translation
+- Optional: a Zotero API key, so metadata can come from your own library instead
+  of a title search (see [Zotero](#zotero-optional))
 
 Models are downloaded on the first parse (~800 MB for `--tier basic`, ~2 GB for
 `standard`) and `run.py` reports which store it will use before parsing. It
@@ -157,6 +159,30 @@ Translation endpoint, resolved in this order:
 ```
 
 `price` is optional and only used to print a cost estimate.
+
+### Zotero (optional)
+
+Metadata comes out shaped like a Zotero item. If the paper is already in your
+Zotero library, that library is the better source: it is authoritative, needs no
+title matching, and returns exactly the fields Zotero defines. It is read
+through the Zotero Web API, so **no Zotero installation is needed**, and this
+pipeline only ever issues GET requests.
+
+Create a key at <https://www.zotero.org/settings/keys/new> — read access is
+enough, write access is never used — and put it in the same
+`.bilingual-paper-notes.json` as above:
+
+```json
+{ "zotero": { "api_key": "..." } }
+```
+
+or export `ZOTERO_API_KEY` for the session. The library id is read from the key
+itself, so nothing else is required; add `"library": "groups/12345"` beside the
+key to read a group library instead of your personal one.
+
+Without a key nothing breaks: the pipeline reads arXiv and Crossref, which fill
+the same fields but have to match by title. `--no-zotero` skips the library on
+purpose, and `python scripts/zotero.py --guide` reprints these instructions.
 
 ### Glossary
 
