@@ -329,8 +329,13 @@ INSTITUTION_RE = re.compile(
     r"department|company|inc\.|corp|hospital|center|centre|\bAI\b|group)", re.I)
 
 
+def _untag(text: str) -> str:
+    """Drop the inline markup a title block uses for markers and emphasis."""
+    return re.sub(r"</?su[bp]>|\*\*", " ", text or "")
+
+
 def _clean_affiliation_text(s: str) -> str:
-    s = re.sub(r"</?su[bp]>", "", s)
+    s = re.sub(r"</?su[bp]>|\*\*", " ", s)
     s = re.sub(r"\[\^[^\]]*\]", "", s)          # footnote markers leaked as [^∗]
     s = re.sub(r"[\w.+-]+@[\w.-]+", "", s)      # emails
     for ch in "*†‡∗§":
@@ -353,8 +358,10 @@ def extract_affiliations(front_text: list[str]) -> list[str]:
     for t in front_text:
         if re.search(r"[\w.+-]+@[\w.-]+", t):     # an author line, not an affiliation
             continue
-        if t.lstrip().startswith("**") or NON_AFFILIATION_RE.search(t):
-            continue                                # a named author, or a statement
+        if re.match(r"^\*\*\s*[^\d*†‡∗§]", _untag(t).strip()):
+            continue                                # a bold person name, not a line about one
+        if NON_AFFILIATION_RE.search(t):
+            continue                                # a statement about contributions
         cleaned = _clean_affiliation_text(t)
         for p in (x.strip(" ,;.·|-–") for x in re.split(r"\d+", cleaned)):
             if len(p) > 2 and INSTITUTION_RE.search(p):
@@ -383,13 +390,11 @@ def affiliation_markers(front_text: list[str]) -> dict:
     """
     out: dict[str, str] = {}
     for line in front_text:
-        if EMAIL_RE.search(line) or "**" in line:
-            continue
-        for chunk in re.split(r"(?<=[A-Za-z])\s+(?=\d)\s*", line):
-            m = re.match(r"(?P<marker>[\d*†‡∗§][\d\s,*†‡∗§]*?)\s*(?P<text>.+)$", chunk.strip())
-            if not m:
-                continue
-            text = _clean_affiliation_text(_strip_markers(m.group("text")))
+        if EMAIL_RE.search(line):
+            continue            # author lines carry addresses, not affiliations
+        flat = _untag(line)
+        for m in re.finditer(r"(?P<marker>[\d*†‡∗§][\d\s,*†‡∗§]*?)\s*(?P<text>[^\d*†‡∗§]+)", flat):
+            text = _clean_affiliation_text(m.group("text"))
             if not text or not INSTITUTION_RE.search(text):
                 continue
             for marker in re.findall(r"\d+|[*†‡∗§]", m.group("marker")):
@@ -444,7 +449,7 @@ def authors_from_front(front_text: list[str], title: str = "") -> list[tuple[str
             name, rest = (bold.group("name"), bold.group("rest")) if bold else (None, chunk)
             if name is None:
                 # an address on the line belongs to the author, not to the name
-                candidate = re.sub(r"[\w.+-]+@[\w.-]+", " ", chunk)
+                candidate = _untag(re.sub(r"[\w.+-]+@[\w.-]+", " ", chunk))
                 m = NAME_RE.match(re.sub(r"[\d\s,*†‡∗§]+$", "", candidate).strip())
                 if not m:
                     continue
@@ -497,11 +502,18 @@ def creators_from_front(authors, front_text: list[str],
     for name, carried in entries:
         if not name:
             continue
-        line = next((t for t in front_text if name.lower() in t.lower()), "")
+        line = next((t for t in front_text if name.lower() in _untag(t).lower()), "")
         line_email = EMAIL_RE.search(line).group(0) if line and EMAIL_RE.search(line) else None
+        if not carried and line:
+            # the name may have come from the parser's metadata rather than from the
+            # title block, so read the markers off the author's own line
+            after = re.search(re.escape(name) + r"\s*([\d*†‡∗§][\d\s,*†‡∗§]*)",
+                              _untag(line), re.I)
+            if after:
+                carried = after.group(1)
         # an author's own line states their affiliation only when it is their line:
         # on a shared line the remaining text is the other authors, not an institution
-        shared = [n for n in names if n.lower() != name.lower() and n.lower() in line.lower()]
+        shared = [n for n in names if n.lower() != name.lower() and n.lower() in _untag(line).lower()]
         affiliation = None if shared else _inline_affiliation(line, name, line_email)
         if not affiliation:
             own = [a for a in affiliations if line and a.lower() in line.lower()]
