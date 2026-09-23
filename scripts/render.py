@@ -938,6 +938,22 @@ def zotero_fields(item_type: str) -> list[str]:
     return list(_ZOTERO_SCHEMA.get("itemTypes", {}).get(item_type, {}).get("fields", []))
 
 
+def author_strings(item: dict) -> list[str]:
+    """The creators as plain strings, for the note's properties.
+
+    Obsidian's Properties panel cannot render an array of objects - it shows raw
+    text and an unsupported-type warning - so the author list is flattened to
+    strings. meta.json keeps Zotero's own `creators` shape; this is a rendering
+    compromise and the only place where the properties differ from a Zotero item.
+    """
+    out = []
+    for c in item.get("creators") or []:
+        name = c.get("name") or " ".join(x for x in (c.get("firstName"), c.get("lastName")) if x)
+        if name:
+            out.append(name)
+    return out
+
+
 def frontmatter(item: dict) -> list[str]:
     """The note's properties: the fields of a Zotero item, in Zotero's order.
 
@@ -949,16 +965,10 @@ def frontmatter(item: dict) -> list[str]:
     out = [f"itemType: {item_type}"]
     if item.get("title"):
         out.append(f"title: {json.dumps(item['title'], ensure_ascii=False)}")
-    creators = item.get("creators") or []
-    if creators:
-        out.append("creators:")
-        for c in creators:
-            out.append(f"  - creatorType: {c.get('creatorType', 'author')}")
-            if c.get("name"):
-                out.append(f"    name: {json.dumps(c['name'], ensure_ascii=False)}")
-            else:
-                out.append(f"    firstName: {json.dumps(c.get('firstName') or '', ensure_ascii=False)}")
-                out.append(f"    lastName: {json.dumps(c.get('lastName') or '', ensure_ascii=False)}")
+    authors = author_strings(item)
+    if authors:
+        out.append("authors: [" +
+                   ", ".join(json.dumps(a, ensure_ascii=False) for a in authors) + "]")
     for field in zotero_fields(item_type):
         if field in ("title",):
             continue
@@ -978,8 +988,6 @@ def render(blocks: list[dict], meta: dict, out_dir: Path, stem: str,
 
     L.append("---")
     L.extend(frontmatter(item))
-    L.append(f"tags: [{('note' if meta.get('source_kind') == 'markdown' else 'paper')}, "
-             "bilingual-paper-notes]")
     L.append("---")
     L.append("")
 

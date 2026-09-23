@@ -572,7 +572,6 @@ def main(argv=None) -> int:
 
     # ---- assemble -------------------------------------------------------
     item.setdefault("itemType", "journalArticle")
-    item["accessDate"] = time.strftime("%Y-%m-%d")
     item = {k: v for k, v in item.items() if v not in (None, "", []) and not k.startswith("_")}
     meta["item"] = item
     args.meta.write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")

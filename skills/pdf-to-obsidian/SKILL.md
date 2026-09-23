@@ -116,8 +116,16 @@ images, lost placeholders, lost formulas or failed translation.
 
 ## What the note looks like
 
-- Frontmatter: title, authors, affiliations, venue, year, arXiv id, DOI, url,
-  citation count + the date it was read, source link, translator, tags.
+- Properties are a **Zotero item**: `itemType`, `title`, `authors`, then the
+  fields that type allows, in Zotero's order (`publicationTitle` or `bookTitle`
+  or `repository`, `date`, `volume`, `issue`, `pages`, `publisher`, `ISBN` /
+  `ISSN`, `DOI`, `url`, `language`, `abstractNote`). `authors` is a plain string
+  list — the one deliberate deviation, because Obsidian's Properties panel cannot
+  display an array of objects; `meta.json` keeps Zotero's own `creators` shape.
+  Author entries carry the affiliation and correspondence address the paper
+  prints, e.g. `"Ashish Vaswani (Google Brain)"`.
+- The note does **not** link or reference the source PDF, and carries no page
+  numbers or page links.
 - **Headings and figure/table captions stay in English** (outline pane and
   cross-references stay coherent); body paragraphs and footnotes are translated
   as foldable callouts:

@@ -18,7 +18,7 @@ The track/recover model of the previous section has two limitations:
 | | |
 |---|---|
 | Structure | heading levels, lists, GFM tables, LaTeX display/inline equations, figure crops, footnotes, a reference list with DOI links |
-| Frontmatter | title, authors, affiliations, venue, year, arXiv id, DOI, url, citation count (+ the date it was read), translator |
+| Properties | a Zotero item: `itemType`, `title`, `authors`, then the fields that item type allows, in Zotero's order — e.g. `publicationTitle`/`bookTitle`/`repository`, `date`, `volume`, `issue`, `pages`, `publisher`, `ISBN`/`ISSN`, `DOI`, `url`, `language`, `abstractNote` |
 | Links | citations, theorems/lemmas/definitions, figures, tables, algorithms and sections become links — in the English **and** the Chinese half |
 | Translation | paragraph-level, cached, glossary-driven, one call per batch of blocks |
 | Noise removed | page numbers, headers/footers, the paper's own table of contents, stray equation labels |
