@@ -341,17 +341,20 @@ def _clean_affiliation_text(s: str) -> str:
 def extract_affiliations(front_text: list[str]) -> list[str]:
     """Pull institution names out of the title block on page 1.
 
-    Only dedicated affiliation lines are used. Author lines (they carry emails)
-    are skipped entirely: on real papers those lines interleave person names,
-    emails and institutions in ways that cannot be split reliably, and a wrong
-    affiliation is worse than a missing one. Measured failure that motivated
-    this: "**Aidan N. Gomez**\u2020 University of Toronto aidan@cs.toronto.edu"
-    used to yield the author as an affiliation.
+    Only dedicated affiliation lines are used. Author lines are skipped: on real
+    papers those lines interleave person names, emails and institutions in ways
+    that cannot be split reliably, and a wrong affiliation is worse than a
+    missing one. Measured failures that motivated this: "**Aidan N. Gomez**\u2020
+    University of Toronto aidan@cs.toronto.edu" used to yield the author as an
+    affiliation, and "**Yifan Shi** Equal contribution. Tsinghua University" used
+    to yield the whole line.
     """
     out: list[str] = []
     for t in front_text:
         if re.search(r"[\w.+-]+@[\w.-]+", t):     # an author line, not an affiliation
             continue
+        if t.lstrip().startswith("**") or NON_AFFILIATION_RE.search(t):
+            continue                                # a named author, or a statement
         cleaned = _clean_affiliation_text(t)
         for p in (x.strip(" ,;.·|-–") for x in re.split(r"\d+", cleaned)):
             if len(p) > 2 and INSTITUTION_RE.search(p):
@@ -361,6 +364,99 @@ def extract_affiliations(front_text: list[str]) -> list[str]:
 
 
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+")
+# A superscript-style marker: 1, 1,2 or a symbol; the author list and the
+# affiliation list both use them, which is what makes the pairing explicit.
+MARKER_RUN_RE = re.compile(r"[\d*†‡∗§][\d\s,*†‡∗§]*")
+NAME_RE = re.compile(r"^([A-Z][\w.'’\-]+(?:\s+[A-Z][\w.'’\-]+){1,3})\s*$")
+
+
+def _strip_markers(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[*†‡∗§]", " ", text)).strip(" ,;.")
+
+
+def affiliation_markers(front_text: list[str]) -> dict:
+    """Marker -> institution, for title blocks that label affiliations 1,2,*.
+
+    Only the marker-to-text pairing the paper itself prints is read; nothing is
+    inferred from an institution's position in a list. Author lines are skipped:
+    they are names, markers and addresses, not affiliation statements.
+    """
+    out: dict[str, str] = {}
+    for line in front_text:
+        if EMAIL_RE.search(line) or "**" in line:
+            continue
+        for chunk in re.split(r"(?<=[A-Za-z])\s+(?=\d)\s*", line):
+            m = re.match(r"(?P<marker>[\d*†‡∗§][\d\s,*†‡∗§]*?)\s*(?P<text>.+)$", chunk.strip())
+            if not m:
+                continue
+            text = _clean_affiliation_text(_strip_markers(m.group("text")))
+            if not text or not INSTITUTION_RE.search(text):
+                continue
+            for marker in re.findall(r"\d+|[*†‡∗§]", m.group("marker")):
+                out.setdefault(marker, text)
+    return out
+
+
+NON_AFFILIATION_RE = re.compile(
+    r"equal contribution|correspond|work done|currently at|now at|jointly|"
+    r"these authors|shared first|alphabetical", re.I)
+
+
+def _inline_affiliation(line: str, name: str, email: str | None) -> str | None:
+    """The institution an author's own line states, if it states one.
+
+    On a line like `**Ashish Vaswani** Google Brain avaswani@google.com` the text
+    after the name (and after the address) is the affiliation, whether or not it
+    reads like an institution - `Google Brain` has no "university" in it. A
+    contribution statement on the same line is dropped before deciding, so
+    `**Yifan Shi** Equal contribution. Tsinghua University` yields the university
+    and a line that only talks about contributions yields nothing.
+    """
+    if not line:
+        return None
+    tail = re.sub(re.escape(name), " ", line, flags=re.I)
+    if email:
+        tail = tail.replace(email, " ")
+    tail = _clean_affiliation_text(tail)
+    tail = re.sub(r"\s+", " ", NON_AFFILIATION_RE.sub(" ", tail)).strip(" .,;·|-–")
+    if not tail or len(tail) > 80:
+        return None
+    return tail
+
+
+def authors_from_front(front_text: list[str], title: str = "") -> list[tuple[str, str]]:
+    """(name, markers) pairs from the title block.
+
+    MinerU's own author metadata is often empty, while the title block has the
+    authors one per line - in bold, or in the comma-separated run a compact
+    paper puts under the title. A candidate only counts when the paper marks it
+    as an author (bold, or carrying an affiliation marker), so a section heading
+    or the title itself cannot slip in.
+    """
+    out: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for line in front_text:
+        # split between authors, never inside a marker run like "1,2"
+        for chunk in [c.strip() for c in re.split(r",\s*(?=[A-Z])", line)]:
+            if not chunk:
+                continue
+            bold = re.match(r"^\*\*(?P<name>.+?)\*\*(?P<rest>.*)$", chunk)
+            name, rest = (bold.group("name"), bold.group("rest")) if bold else (None, chunk)
+            if name is None:
+                # an address on the line belongs to the author, not to the name
+                candidate = re.sub(r"[\w.+-]+@[\w.-]+", " ", chunk)
+                m = NAME_RE.match(re.sub(r"[\d\s,*†‡∗§]+$", "", candidate).strip())
+                if not m:
+                    continue
+                name = m.group(1)
+                rest = (re.search(r"([\d*†‡∗§][\d\s,*†‡∗§]*)$", candidate.strip()) or [None, ""])[1]
+            name = _strip_markers(name)
+            if not name or INSTITUTION_RE.search(name) or name.lower() in seen:
+                continue
+            markers = ",".join(re.findall(r"\d+|[*†‡∗§]", rest))
+            seen.add(name.lower())
+            out.append((name, markers))
+    return out
 
 
 def _corresponding_email(front_text: list[str]) -> str | None:
@@ -386,26 +482,35 @@ def creators_from_front(authors, front_text: list[str],
                         affiliations: list[str]) -> list[dict]:
     """Zotero creators from the title block, with the affiliations we can pair.
 
-    The pairing follows two rules and never guesses: an author whose own line
-    states an institution keeps it, and a paper with exactly one affiliation
-    gives it to every author. Anything else stays unsuffixed, because matching
-    institutions to people by position is how a wrong affiliation gets in. The
-    correspondence address is added only to the author it is printed next to.
+    The pairing only follows what the paper states: the institution on an
+    author's own line, the affiliation markers that line carries (1,2,*), or the
+    single affiliation of the whole title block. Institutions are never matched
+    to people by position, because that is how a wrong affiliation gets in. The
+    correspondence address goes to the author it is printed beside.
     """
     email = _corresponding_email(front_text)
+    markers = affiliation_markers(front_text)
+    entries = [e if isinstance(e, tuple) else (re.sub(r"\s+", " ", str(e)).strip(), "")
+               for e in (authors or [])]
+    names = [n for n, _ in entries if n]
     out: list[dict] = []
-    for raw in authors or []:
-        name = re.sub(r"\s+", " ", str(raw)).strip()
+    for name, carried in entries:
         if not name:
             continue
         line = next((t for t in front_text if name.lower() in t.lower()), "")
-        # the institution this author's own line states, or the only one the paper
-        # has; never one picked by position
-        own = [a for a in affiliations if line and a.lower() in line.lower()]
-        if own:
-            affiliation = own[0]
-        else:
-            affiliation = affiliations[0] if len(affiliations) == 1 else None
+        line_email = EMAIL_RE.search(line).group(0) if line and EMAIL_RE.search(line) else None
+        # an author's own line states their affiliation only when it is their line:
+        # on a shared line the remaining text is the other authors, not an institution
+        shared = [n for n in names if n.lower() != name.lower() and n.lower() in line.lower()]
+        affiliation = None if shared else _inline_affiliation(line, name, line_email)
+        if not affiliation:
+            own = [a for a in affiliations if line and a.lower() in line.lower()]
+            if not own and carried and markers:
+                own = [markers[m] for m in re.findall(r"\d+|[*†‡∗§]", carried) if m in markers]
+            if own:
+                affiliation = ", ".join(dict.fromkeys(own))
+            elif len(affiliations) == 1:
+                affiliation = affiliations[0]
         address = email if (email and line and email in line) else None
         suffix = ", ".join(x for x in (affiliation, address) if x)
         if suffix:
@@ -607,14 +712,16 @@ def normalize(middle_json: Path, pdf_path: Path, out_dir: Path,
     authors = document.get("authors") or []
     if authors and isinstance(authors[0], str) and "," in authors[0]:
         authors = [a.strip() for a in authors[0].split(",")]
+    if not authors:
+        # MinerU's author metadata is often empty; the title block still has them
+        authors = authors_from_front(front_text, document.get("title") or "")
+    item = {"itemType": "journalArticle",   # replaced once the document is identified
+            "title": document.get("title") or stem,
+            "creators": creators_from_front(authors, front_text, affiliations)}
     meta = {
         # The metadata is a Zotero item. Every other key in this file is pipeline
         # state, and none of it reaches the note.
-        "item": {
-            "itemType": "journalArticle",   # replaced once the document is identified
-            "title": document.get("title") or stem,
-            "creators": creators_from_front(authors, front_text, affiliations),
-        },
+        "item": item,
         "page_count": pdf_page_count(pdf_path),
         "stem": stem,
         "source_kind": "pdf",

@@ -369,15 +369,21 @@ def keep_affiliations(creators: list[dict], previous: list[dict]) -> list[dict]:
         return creators
     by_last = {}
     for c in previous:
-        name = c.get("name") or c.get("lastName") or ""
-        last = str(name).split()[-1].lower()
-        if "(" in name:                      # "A B (Institute, a@b.c)"
+        name = c.get("name") or ""
+        if not name or "(" not in name:
+            continue                     # nothing to carry: this one has no affiliation
+        # the surname is the last word before the affiliation, never the
+        # parenthetical itself ("Ashish Vaswani (Google Brain)" -> vaswani)
+        base = name.split("(")[0].strip()
+        last = base.split()[-1].lower() if base else ""
+        if last:
             by_last[last] = name
     if not by_last:
         return creators
     out = []
     for c in creators:
-        last = str(c.get("lastName") or c.get("name") or "").split()[-1].lower()
+        base = str(c.get("lastName") or c.get("name") or "").split("(")[0].strip()
+        last = base.split()[-1].lower() if base else ""
         if last in by_last:
             out.append({"creatorType": c.get("creatorType", "author"), "name": by_last[last]})
         else:
