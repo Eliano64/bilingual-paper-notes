@@ -32,7 +32,7 @@ and the cross-references coherent.
 - Python 3.10+
 - [MinerU](https://github.com/opendatalab/MinerU) 4.x for PDF parsing:
   `pip install -U "mineru>=4.0,<5"`, then `mineru-kit models download --tier standard`
-- PyMuPDF (`pip install pymupdf`) — optional, improves heading levels and page links
+- PyMuPDF (`pip install pymupdf`) — optional, improves heading levels
 - An OpenAI-compatible endpoint + API key for translation
 - Optional: a Zotero API key, so metadata can come from your own library instead
   of a title search (see [Zotero](#zotero-optional))
@@ -65,14 +65,41 @@ python skills/pdf-to-obsidian/SKILL.md    # what an agent reads
 
 ## Two skills, one code base
 
-| Skill | Input | Entry point |
-|---|---|---|
-| `pdf-to-obsidian` | an English paper PDF | `scripts/run.py paper.pdf` |
-| `translate-markdown` | an English `.md` note | `scripts/run.py note.md` |
+![workflow](assets/workflow.svg)
 
-Both share `scripts/` and the same intermediate layer (`blocks.jsonl`), so
-rendering, translation, caching and verification exist once. The Markdown path
-adds only `md2blocks.py` — a segmenter, since there is nothing to extract.
+The two skills differ in one thing only — what they take in. Both share
+`scripts/` and the same intermediate layer (`blocks.jsonl`), so rendering,
+translation, caching and verification exist once; the Markdown path adds only
+`md2blocks.py`, a segmenter, because there is nothing to extract.
+
+`pdf-to-obsidian` (a PDF in) has two modes:
+
+```bash
+python scripts/run.py paper.pdf                  # PDF -> Markdown + Chinese
+python scripts/run.py paper.pdf --no-translate    # PDF -> Markdown only
+```
+
+`translate-markdown` (an English `.md` in) owns the md → bilingual-md half: it
+takes a note that is already Markdown — a paper's Markdown source, or a note
+`pdf-to-obsidian` wrote — and adds the Chinese. Translating a note that came from
+the PDF path is best done through its work directory, where the typed blocks are
+still available:
+
+```bash
+python scripts/run.py paper.pdf --stage translate   # reads blocks.jsonl
+python scripts/run.py paper.pdf --stage render      # re-renders the note
+```
+
+Four things people ask for, and where each lands:
+
+| The user wants | Use |
+|---|---|
+| a PDF turned into an Obsidian note | `pdf-to-obsidian` |
+| a PDF readable bilingually | `pdf-to-obsidian` (translation is on by default) |
+| structure, metadata and links only, no translation | `pdf-to-obsidian --no-translate` |
+| an existing Markdown note translated | `translate-markdown` |
+
+The diagram is generated from `assets/workflow.puml` (`puml assets/workflow.puml`).
 
 ## Other harnesses and non-pi use
 
@@ -126,7 +153,7 @@ paper.md-out/
 parse      MinerU          PDF -> middle_json.json + images
 md         normalize       middle_json -> blocks.jsonl -> note.md
            md2blocks       (Markdown input instead of parse + normalize)
-meta       arXiv/Crossref  DOI, venue, year, citation count
+meta       Zotero / arXiv / Crossref   the document's identity, as a Zotero item
 translate  LLM             Chinese into blocks.jsonl
 render     normalize       note.md written from blocks.jsonl
 verify     —               structural checks; exits 1 on broken output
@@ -213,13 +240,17 @@ One 92-page, equation-heavy paper, on a laptop with a mobile GPU, standard tier:
   as long as the PDF is inside the vault too.
 - `assets/bilingual-paper-notes.css` styles the 译文 callout (muted title line, tight spacing).
   Copy it to `<vault>/.obsidian/snippets/` and enable it in Appearance.
-- PDF++ users: `--page-markers link` turns page boundaries into jump links.
+- The note does not link or reference the source PDF, and carries no page
+  numbers or page links (by decision: they would be the only thing pointing at a
+  file the note does not own).
 
 ## Privacy
 
 - The PDF is parsed **locally**.
 - Metadata lookups send only the **title** (and, for arXiv, the arXiv id) to
-  arXiv / Crossref / Semantic Scholar.
+  arXiv and Crossref. If you configure a Zotero key, that request goes to
+  `api.zotero.org` and reads your own library; the key is read from a gitignored
+  file and is never written by these scripts.
 - Translation sends the **paper text** to whatever endpoint you configure.
   Nothing else leaves the machine, and no key is ever written by these scripts.
 - `.bilingual-paper-notes.json` is in `.gitignore` for that reason.
@@ -234,14 +265,13 @@ notes.
 - **Slides / lecture decks.** Landscape pages with a few short text boxes per
   page break every paper-shaped heuristic (front-matter block, references
   section, citation links) and the paragraph-level callout layout reads badly on
-  fragments. Metadata lookup cannot succeed either, so a citation count would be
-  meaningless. The skill documents this instead of guessing.
+  fragments. Metadata lookup cannot succeed either. The skill documents this
+  instead of guessing.
 - **Books and long textbooks (100+ pages).** A 92-page paper already produces a
   ~0.5 MB note; a textbook would be several MB in one file, which degrades
   Obsidian's editor, search and outline pane, and makes review impossible. Split
-  by chapter first — ideally along the PDF's own outline — keep the original page
-  numbers so page links still point at the source, and produce one note per
-  chapter plus an index note.
+  by chapter first — ideally along the PDF's own outline — and produce one note
+  per chapter plus an index note.
 
 ## Interaction with other skills and plugins
 
@@ -263,12 +293,13 @@ Where neighbouring skills own the task:
 ## Known limitations
 
 - Metadata is best-effort and never guessed: an unregistered paper gets its
-  arXiv id and year but no DOI, and a citation count needs either a
-  Crossref-registered DOI or a Semantic Scholar key — without one, S2's shared
-  pool is throttled and the count is simply omitted.
-- Affiliations are only extracted from a dedicated affiliation line. On papers
-  that interleave author names, emails and institutions on one line, none are
-  emitted rather than a wrong one.
+  arXiv id and date but no DOI, and a field with no source stays empty rather
+  than being inferred.
+- Affiliations come from what the title block states: the author's own line, the
+  affiliation markers that line carries (`1,2,*`) against the paper's
+  marker-to-institution list, or the paper's single affiliation. An author whose
+  affiliation cannot be established that way keeps none, rather than inheriting
+  someone else's.
 - Numeric citations (`[12]`, `[8–10]`) are linked; author-year styles
   (`(Smith et al., 2024)`) are left as text.
 - Section-numbered heading levels come from the section numbering; papers whose

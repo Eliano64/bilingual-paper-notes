@@ -1,0 +1,58 @@
+@startuml
+' Workflow of the two skills. Render with:  puml assets/workflow.puml
+' Kept next to the generated workflow.svg so the diagram stays revisable.
+' NOTE: do not name the diagram (@startuml <name>): PlantUML would then write
+' <name>.svg instead of workflow.svg, and the puml wrapper reports FAILED.
+
+skinparam shadowing false
+skinparam defaultFontName "Segoe UI"
+skinparam ArrowColor #555555
+skinparam ActivityBorderColor #666666
+skinparam ActivityDiamondBorderColor #666666
+skinparam ActivityBackgroundColor #FFFFFF
+skinparam NoteBackgroundColor #FFFDF0
+skinparam NoteBorderColor #C9C29A
+skinparam PartitionBorderColor #AAAAAA
+skinparam TitleFontSize 15
+
+title Two skills, one engine: where a PDF and a Markdown note each go
+
+|#EDF3FB|pdf-to-obsidian   (input: a PDF)|
+start
+:parse - MinerU 4.x
+PDF -> middle_json.json + images;
+:md / normalize - structure, cross-reference links, figure crops
+-> blocks.jsonl + meta.json;
+:meta - your Zotero library, else arXiv / Crossref
+-> the note's properties;
+if (translation endpoint configured?) then (yes)
+  :translate - reads each block's own flags
+-> zh / caption_zh written back into blocks.jsonl;
+else (no, or --no-translate)
+  :translation skipped
+this is the PDF -> Markdown-only mode;
+endif
+:render - blocks.jsonl -> note.md;
+:verify - structural checks, exits 1 on broken output;
+stop
+
+|#F4F1FB|translate-markdown   (input: an English .md note)|
+start
+:md2blocks - segment the note by Markdown syntax
+-> blocks.jsonl;
+:translate - reads each block's own flags
+-> zh / caption_zh written back into blocks.jsonl;
+:render - blocks.jsonl -> note.md;
+:verify - structural checks, exits 1 on broken output;
+stop
+
+legend right
+  Both lanes write the **same intermediate**: blocks.jsonl, a list of typed
+  blocks. What gets translated is decided there, by each block's own
+  **translatable** flag - set by the segmenter that produced the block:
+  MinerU's block types on the PDF side, Markdown syntax on the note side.
+  That is why translating a PDF's note through its work directory
+  (--stage translate, then --stage render) keeps the finer typing, while
+  re-segmenting a finished note does not.
+endlegend
+@enduml

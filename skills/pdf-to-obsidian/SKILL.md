@@ -1,8 +1,8 @@
 ---
 name: pdf-to-obsidian
-description: Convert an English academic PDF into one bilingual Obsidian note. Extracts headings, figures, tables, equations, footnotes and references; writes Obsidian-flavoured Markdown with working cross-reference links; fills frontmatter from arXiv/Crossref (DOI, venue, year, citation count); and adds a paragraph-level Chinese translation in collapsible callouts. Use when the user wants to read, translate, summarise or annotate an English paper inside Obsidian, or asks to turn a paper PDF into Markdown. Not for creating, merging or form-filling PDFs (use the pdf skill), and not for hand-authoring Obsidian syntax (use obsidian-markdown).
+description: Convert a PDF into an Obsidian-flavoured Markdown note, and optionally its bilingual half in the same run. Extracts structure (headings, lists, GFM tables, LaTeX equations, figure crops, footnotes, reference list) and links cross-references in both halves; the note's properties are a Zotero item (type, authors with the affiliations the paper prints, venue or repository, date, DOI, ISBN, url), read from your Zotero library when a key is set and otherwise from arXiv/Crossref. Two ways to run it — PDF to Markdown only (`--no-translate`, no translation endpoint needed), or PDF to Markdown plus Chinese translation in collapsible callouts (default when an endpoint is configured). Use when the user wants a paper PDF turned into an Obsidian note, its structure and metadata extracted, or the paper readable bilingually. Input that is already Markdown belongs to translate-markdown. Not for creating, merging or form-filling PDFs (pdf skill); not for authoring Obsidian syntax (obsidian-markdown).
 license: MIT
-compatibility: Requires Python 3.10+. Parsing needs MinerU 4.x (`pip install -U "mineru>=4.0,<5"` plus `mineru-kit models download`); PyMuPDF (`pip install pymupdf`) is optional but improves heading levels and page links. Translation needs an OpenAI-compatible endpoint and API key. Network access is used for the metadata stage. Tested on Windows and Linux.
+compatibility: Requires Python 3.10+. Parsing needs MinerU 4.x (`pip install -U "mineru>=4.0,<5"` plus `mineru-kit models download`); PyMuPDF (`pip install pymupdf`) is optional but improves heading levels. Translation needs an OpenAI-compatible endpoint and API key (or pi's own provider config); pass `--no-translate` to produce the structure half only. Network access is used for the metadata stage and is optional. Tested on Windows and Linux.
 ---
 
 # PDF → bilingual Obsidian note
@@ -14,7 +14,32 @@ a collapsible callout; cross-references actually click.
 
 - The user wants an English paper readable or annotatable inside Obsidian.
 - The user wants a paper translated paragraph by paragraph (English preserved).
-- The user asks for a paper's structure, metadata or citation count.
+- The user asks for a paper's structure, metadata or cross-reference links.
+- The user wants a paper PDF turned into Markdown at all — including "just the
+  Markdown", which is `--no-translate`.
+
+## The two skills, and the four things people ask for
+
+`pdf-to-obsidian` takes a PDF; its sibling `translate-markdown` takes a note that
+is already Markdown. That is the only difference in what they take in — both
+write a bilingual Obsidian note, and both are the same engine over the same
+intermediate layer.
+
+| The user wants | What to run |
+|---|---|
+| a PDF turned into an Obsidian note | `python scripts/run.py paper.pdf` |
+| a PDF readable bilingually | the same command; translation is on by default |
+| structure / metadata / links only, no translation | `python scripts/run.py paper.pdf --no-translate` |
+| an existing `.md` note translated | the `translate-markdown` skill |
+
+Translating a note that this skill produced is best done through its work
+directory, because the typed blocks are still there — re-segmenting a rendered
+note loses them (captions become ordinary paragraphs, and would be translated):
+
+```bash
+python scripts/run.py paper.pdf --stage translate   # translates blocks.jsonl
+python scripts/run.py paper.pdf --stage render      # re-renders the note
+```
 
 ## Scope: what this does NOT handle
 
@@ -23,8 +48,8 @@ Be explicit with the user rather than producing a bad artifact:
 | Input | Status |
 |---|---|
 | Academic papers, preprints, technical reports | Supported |
-| **Slides / lecture decks** | **Not supported.** Slides are landscape with a few short text boxes per page; the paragraph-level callout layout and the paper-specific heuristics (front-matter block, references section, citation linkification) all assume prose. Metadata lookup would also return nothing useful, and a citation count would be meaningless. Do not silently run it on a deck. |
-| **Books / long textbooks (100+ pages)** | **Not supported.** One note would be several MB (a 92-page paper already yields ~0.5 MB), which degrades Obsidian's editor, search and outline pane, and makes the artifact unreviewable. Split the book by chapter first (ideally along its own PDF outline), keep the original page numbers so page links still point at the source, and produce one note per chapter plus an index note. |
+| **Slides / lecture decks** | **Not supported.** Slides are landscape with a few short text boxes per page; the paragraph-level callout layout and the paper-specific heuristics (front-matter block, references section, citation linkification) all assume prose. Metadata lookup would also return nothing useful. Do not silently run it on a deck. |
+| **Books / long textbooks (100+ pages)** | **Not supported.** One note would be several MB (a 92-page paper already yields ~0.5 MB), which degrades Obsidian's editor, search and outline pane, and makes the artifact unreviewable. Split the book by chapter first (ideally along its own PDF outline) and produce one note per chapter plus an index note. |
 | Scanned PDFs with no text layer | Works only if MinerU's OCR handles the language; check the output. |
 | Legal/medical text where a mistranslation is unacceptable | Use it to draft, then have a human verify. |
 
@@ -107,8 +132,8 @@ python ../../scripts/run.py paper.pdf --stage translate   # re-run one stage
 python ../../scripts/run.py paper.pdf --zh-style callout-folded
 ```
 
-Stages: `parse` (MinerU) → `md` (normalise + render) → `meta` (arXiv/Crossref/
-Semantic Scholar) → `translate` → `render` → `verify`. Each is re-runnable, and
+Stages: `parse` (MinerU) → `md` (normalise + render) → `meta` (Zotero, else
+arXiv / Crossref) → `translate` → `render` → `verify`. Each is re-runnable, and
 everything for a document lands in one output directory.
 
 Always read `verify.py`'s output last: it exits non-zero on dead links, missing
@@ -151,9 +176,9 @@ images, lost placeholders, lost formulas or failed translation.
 | `--zh-style quote\|callout-folded` | presentation of the Chinese half |
 | `--translate-captions` | also translate figure/table captions (default off) |
 | `--glossary FILE` | extra domain glossary, merged over the built-in one |
-| `--stage meta` | refresh DOI/citation count without re-parsing or re-translating |
+| `--stage meta` | refresh the metadata (Zotero / arXiv / Crossref) without re-parsing or re-translating |
 | `--stage render` | change layout only; free, no LLM calls |
-| `--page-markers link` | PDF++ jump links (`[[paper.pdf#page=12]]`) |
+| `--zotero-key` / `--no-zotero` | read metadata from a Zotero library, or skip it (see ZOTERO.md) |
 | `--batch-units` / `--batch-chars` | translation request size (see pitfalls) |
 
 ## Pitfalls (measured, not guessed)
@@ -181,8 +206,8 @@ images, lost placeholders, lost formulas or failed translation.
    year is far from the identifier's year: "Attention Is All You Need" matches a
    2025 book chapter whose chapter title is identical.
 6. **OpenAlex is credit-budgeted** (`Insufficient budget … Resets at midnight
-   UTC`, `Retry-After` ~19600 s) — do not depend on it. Semantic Scholar without
-   a key is throttled but usually succeeds on retry.
+   UTC`, `Retry-After` ~19600 s) — do not depend on it. That is why the metadata
+   sources are a Zotero library (exact, offline) and then arXiv and Crossref.
 7. **Unknown block types must not be dropped.** MinerU's `chart` carries figures
    and `aside_text` carries the arXiv stamp; classify unknown blocks by shape
    (image_path → figure, text → body).
@@ -229,10 +254,13 @@ repository's `skills/` directory rather than copying this directory out of it.
 scripts/run.py            orchestrator (start here)
 scripts/render.py   MinerU middle_json -> blocks.jsonl -> note.md
 scripts/translate.py      block-level translation + sqlite cache
-scripts/enrich_meta.py    arXiv / Crossref / Semantic Scholar
+scripts/enrich_meta.py    Zotero / arXiv / Crossref -> the note's Zotero item
+scripts/zotero.py         read-only Zotero Web API client (see ZOTERO.md)
+scripts/zotero_schema.py  Zotero's data model, from the official schema
 scripts/verify.py         structural checks
 scripts/md2blocks.py      Markdown input entry (see the translate-markdown skill)
 scripts/glossary.txt      default glossary (keep the structural terms)
 examples/glossary.example.txt  a filled-in domain glossary
 assets/bilingual-paper-notes.css       Obsidian snippet that styles the 译文 callout
+assets/workflow.svg       the diagram in the README (source: workflow.puml)
 ```

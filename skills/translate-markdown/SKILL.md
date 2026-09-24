@@ -1,6 +1,6 @@
 ---
 name: translate-markdown
-description: Turn an English Markdown note into a bilingual Obsidian note. Adds a paragraph-level Chinese translation in collapsible callouts while leaving headings, code, tables, equations, references and the author's own wikilinks untouched. Use when the user wants an existing .md note translated, wants English notes readable bilingually in Obsidian, or has a paper's Markdown source (rather than a PDF) to translate. Not for PDF input (use pdf-to-obsidian) and not for authoring or fixing Obsidian syntax itself (use obsidian-markdown).
+description: Turn an English Markdown note into a bilingual Obsidian note — paragraph-level Chinese in collapsible callouts under each paragraph, while headings, code, tables, equations, references and the author's own wikilinks are left exactly as written. This is the md → bilingual-md half of the pair; the PDF half is pdf-to-obsidian, and a note it produced can be fed here. Use when the input is already Markdown — a paper's Markdown source, or a note written by pdf-to-obsidian — and the user wants it readable bilingually in Obsidian. Not for PDF input (use pdf-to-obsidian, which parses the PDF and can translate in the same run).
 license: MIT
 compatibility: Requires Python 3.10+. No PDF tooling involved. Translation needs an OpenAI-compatible endpoint and API key (BPN_* or OPENAI_* environment variables, a .bilingual-paper-notes.json config file, or pi's own provider config). Tested on Windows and Linux.
 ---
@@ -32,6 +32,20 @@ Metadata is not looked up for Markdown input: there is no document to identify,
 so the pipeline keeps the note's own properties and only segments, translates and
 renders it. (Identifiers, arXiv/Crossref lookup and Zotero all apply to PDF input
 through the `pdf-to-obsidian` skill.)
+
+This skill is the md → bilingual-md half of the pair. `pdf-to-obsidian` takes a
+PDF and can produce a bilingual note in one run; if a note came from there, this
+skill can translate it, but going through that skill's work directory keeps the
+typed blocks it derived from the PDF:
+
+```bash
+python scripts/run.py paper.pdf --stage translate   # translates blocks.jsonl
+python scripts/run.py paper.pdf --stage render      # re-renders the note
+```
+
+Feeding this skill the rendered note instead re-segments it from Markdown syntax,
+which is coarser (figure and table captions become ordinary paragraphs, and are
+then translated).
 
 ```bash
 python ../../scripts/run.py note.md                    # all stages
