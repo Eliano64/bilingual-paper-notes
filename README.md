@@ -235,11 +235,8 @@ One 92-page, equation-heavy paper, on a laptop with a mobile GPU, standard tier:
 
 ## Obsidian setup
 
-- The note uses `![[paper.assets/…]]` and `[[paper.pdf#page=12]]`. Obsidian
-  resolves both by path suffix, so the folder can live anywhere in the vault —
-  as long as the PDF is inside the vault too.
-- `assets/bilingual-paper-notes.css` styles the 译文 callout (muted title line, tight spacing).
-  Copy it to `<vault>/.obsidian/snippets/` and enable it in Appearance.
+- The note uses `![[paper.assets/…]]`. Obsidian resolves those by path suffix,
+  so the folder can live anywhere in the vault.
 - The note does not link or reference the source PDF, and carries no page
   numbers or page links (by decision: they would be the only thing pointing at a
   file the note does not own).

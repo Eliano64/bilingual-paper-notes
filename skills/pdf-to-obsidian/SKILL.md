@@ -261,6 +261,5 @@ scripts/verify.py         structural checks
 scripts/md2blocks.py      Markdown input entry (see the translate-markdown skill)
 scripts/glossary.txt      default glossary (keep the structural terms)
 examples/glossary.example.txt  a filled-in domain glossary
-assets/bilingual-paper-notes.css       Obsidian snippet that styles the 译文 callout
 assets/workflow.svg       the diagram in the README (source: workflow.puml)
 ```
