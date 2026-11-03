@@ -4,14 +4,15 @@
 Writes "zh" (body/title/footnote) and "caption_zh" (figure/table captions) back
 into blocks.jsonl, so re-rendering is just: render.py --render-only.
 
-    python translate.py out/dsh/md/blocks.jsonl --limit 20        # smoke test
-    python translate.py out/dsh/md/blocks.jsonl --dry-run         # cost estimate
-    python translate.py out/dsh/md/blocks.jsonl                   # full run
+    python scripts/translate.py <out>/md/blocks.jsonl --limit 20   # smoke test
+    python scripts/translate.py <out>/md/blocks.jsonl --dry-run    # cost estimate
+    python scripts/translate.py <out>/md/blocks.jsonl              # full run
 
 Design notes
 ------------
 * Endpoint: flags > environment (BPN_* or OPENAI_*) > config file
-  (.bilingual-paper-notes.json) > pi's own config. No key is ever stored by this script.
+  (.bilingual-paper-notes.json, found beside the note or in a parent directory).
+  No key is ever stored by this script, and no harness-specific config is read.
 * Thinking must be disabled explicitly: DeepSeek enables it by default and
   spends the whole max_tokens budget on reasoning (measured: 60/60 tokens).
   Output tokens dominate cost, so leaving it on is a pure waste here.
@@ -39,6 +40,16 @@ from pathlib import Path
 
 PH = "\u27e6{}\u27e7"          # ⟦0⟧ — rare enough that no model rewrites it
 DEFAULT_GLOSSARY = Path(__file__).with_name("glossary.txt")
+CONFIG_NAME = ".bilingual-paper-notes.json"
+
+
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 MASK_RULES = [
     (re.compile(r"\$\$.*?\$\$", re.S), "math"),
@@ -103,7 +114,13 @@ def strip_framing(text: str) -> str:
 
 
 def unmask(text: str, spans: list[str]) -> tuple[str, bool, bool]:
-    """Restore placeholders.
+    """Restore placeholders, innermost first.
+
+    A span may itself contain an earlier placeholder: a wikilink that holds an
+    inline formula is masked as one link whose restored text still carries the
+    formula's placeholder. Only the outer token appears in the model's reply, so
+    a placeholder nested inside another span must not be required there, and
+    restoration has to run from the last span back to the first.
 
     Returns (text, ok, duplicated). A *missing* placeholder means real content
     was dropped and the block is rejected; a *repeated* one only means the model
@@ -112,14 +129,17 @@ def unmask(text: str, spans: list[str]) -> tuple[str, bool, bool]:
     faithful Chinese, so it is accepted and flagged for review.
     """
     ok, duplicated = True, False
-    for i, span in enumerate(spans):
+    nested = {i: any(PH.format(i) in spans[j] for j in range(len(spans)) if j != i)
+              for i in range(len(spans))}
+    for i in range(len(spans)):
         tok = PH.format(i)
         n = text.count(tok)
-        if n == 0:
+        if n == 0 and not nested[i]:
             ok = False
-        elif n > 1:
+        elif n > 1 and not nested[i]:
             duplicated = True
-        text = text.replace(tok, span)
+    for i in range(len(spans) - 1, -1, -1):
+        text = text.replace(PH.format(i), spans[i])
     # a renumbered/invented placeholder: ⟦12⟧ where only 0..n exist
     if re.search(r"\u27e6\d+\u27e7", text):
         ok = False
@@ -138,9 +158,11 @@ def unmask(text: str, spans: list[str]) -> tuple[str, bool, bool]:
 # --------------------------------------------------------------------------
 # endpoint resolution
 # --------------------------------------------------------------------------
-# Order: explicit flags > environment > config file > pi's own config.
-# pi's config is consulted last so that this also works, unchanged, for people
-# who do not use pi at all.
+# Order: explicit flags > environment > config file.
+# The config file is looked for beside the working directory and in its parents,
+# so running from a skill directory still finds a file kept at the project root.
+# Nothing here reads a harness's own configuration: the skill must work the same
+# way under every harness.
 
 CONFIG_CANDIDATES = (".bilingual-paper-notes.json", "~/.config/bilingual-paper-notes/config.json",
                      "~/.bilingual-paper-notes.json")
@@ -148,8 +170,22 @@ ENV_PAIRS = (("BPN_BASE_URL", "BPN_API_KEY", "BPN_MODEL"),
              ("OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL"))
 
 
+def config_candidates() -> list[Path]:
+    """The nearest config file at or above the working directory, then the homes."""
+    out: list[Path] = []
+    here = Path.cwd().resolve()
+    for _ in range(10):
+        out.append(here / CONFIG_NAME)
+        if here.parent == here:
+            break
+        here = here.parent
+    out.append(Path("~/.config/bilingual-paper-notes/config.json").expanduser())
+    out.append(Path("~/.bilingual-paper-notes.json").expanduser())
+    return out
+
+
 def load_config(explicit: Path | None) -> dict:
-    paths = [explicit] if explicit else [Path(c).expanduser() for c in CONFIG_CANDIDATES]
+    paths = [explicit] if explicit else config_candidates()
     for p in paths:
         if p and p.exists():
             try:
@@ -159,55 +195,20 @@ def load_config(explicit: Path | None) -> dict:
     return {}
 
 
-def from_pi_config(provider: str | None, model: str | None):
-    """Reuse a provider already configured for pi, if there is one."""
-    root = Path(os.environ.get("PI_AGENT_DIR", "~/.pi/agent")).expanduser()
-    try:
-        provs = json.loads((root / "models.json").read_text(encoding="utf-8")).get("providers", {})
-    except Exception:
-        return {}
-    if not provs:
-        return {}
-    want = provider
-    if not want:
-        try:
-            want = json.loads((root / "settings.json").read_text(encoding="utf-8")).get("defaultProvider")
-        except Exception:
-            want = None
-    p = provs.get(want) if want else None
-    if not (p and p.get("apiKey")):
-        p = next((v for v in provs.values() if v.get("apiKey")), None)
-    if not p:
-        return {}
-    return {"base_url": p.get("baseUrl"), "api_key": p.get("apiKey"),
-            "model": model or (want and provs.get(want) is p and _pi_default_model(root))}
-
-
-def _pi_default_model(root: Path):
-    try:
-        return json.loads((root / "settings.json").read_text(encoding="utf-8")).get("defaultModel")
-    except Exception:
-        return None
-
-
 def load_endpoint(cfg: dict, model: str | None, base_url: str | None,
-                  api_key: str | None, provider: str | None = None):
+                  api_key: str | None):
     base = key = None
+    # only a complete pair counts: taking a base URL from one provider and the
+    # key from another silently sends the request to the wrong place
     for ebase, ekey, emodel in ENV_PAIRS:
-        if not base and os.environ.get(ebase):
-            base = os.environ[ebase]
-        if not key and os.environ.get(ekey):
-            key = os.environ[ekey]
-        model = model or os.environ.get(emodel)
+        if os.environ.get(ebase) and os.environ.get(ekey):
+            base = base or os.environ[ebase]
+            key = key or os.environ[ekey]
+            model = model or os.environ.get(emodel)
     if not key:
         base = base or cfg.get("base_url")
         key = cfg.get("api_key") or cfg.get("apiKey")
         model = model or cfg.get("model")
-    if not key:
-        p = from_pi_config(provider, model)
-        base = base or p.get("base_url")
-        key = p.get("api_key")
-        model = model or p.get("model")
     base = (base_url or base or "").rstrip("/")
     key = api_key or key
     if not base:
@@ -224,19 +225,7 @@ def load_endpoint(cfg: dict, model: str | None, base_url: str | None,
 
 def price_table(model: str, cfg: dict | None = None) -> dict:
     """Per-1M-token prices. Optional: only used to print a cost estimate."""
-    cfg = cfg or {}
-    if cfg.get("price"):
-        return cfg["price"]
-    try:   # pi records prices for its own catalogue; reuse if present
-        root = Path(os.environ.get("PI_AGENT_DIR", "~/.pi/agent")).expanduser()
-        data = json.loads((root / "models-store.json").read_text(encoding="utf-8"))
-        for _prov, body in data.items():
-            for m in body.get("models", []):
-                if m.get("id") == model:
-                    return m.get("cost") or {}
-    except Exception:
-        pass
-    return {}
+    return (cfg or {}).get("price") or {}
 
 
 # --------------------------------------------------------------------------
@@ -566,6 +555,7 @@ def read_glossary(path: Path | None) -> dict[str, str]:
 
 
 def main(argv=None):
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("blocks", type=Path, help="blocks.jsonl produced by render.py")
@@ -575,12 +565,13 @@ def main(argv=None):
                          "Chinese cross-references stop being linked)")
     ap.add_argument("--model", default=None)
     ap.add_argument("--base-url", default=None)
-    ap.add_argument("--api-key", default=None)
+    ap.add_argument("--api-key", default=None,
+                    help="prefer the environment or the config file: a key on the "
+                         "command line is visible in the process list and shell history")
     ap.add_argument("--config", type=Path, default=None,
                     help="json with base_url/api_key/model/price; defaults to "
-                         "./.bilingual-paper-notes.json then ~/.config/bilingual-paper-notes/config.json")
-    ap.add_argument("--provider", default=None,
-                    help="when falling back to pi's config, which provider to use")
+                         "./.bilingual-paper-notes.json (or the nearest one in a parent "
+                         "directory), then ~/.config/bilingual-paper-notes/config.json")
     ap.add_argument("--batch-units", type=int, default=5,
                     help="units per request (smaller = fewer merge failures, more calls)")
     ap.add_argument("--batch-chars", type=int, default=3000,
@@ -614,8 +605,7 @@ def main(argv=None):
 
     cache = Cache(args.blocks.parent / "translate.sqlite")
     cfg = load_config(args.config)
-    base, key, model = load_endpoint(cfg, args.model, args.base_url, args.api_key,
-                                     args.provider)
+    base, key, model = load_endpoint(cfg, args.model, args.base_url, args.api_key)
 
     # split into cached and to-do, restoring the cached ones immediately
     todo: list[list] = []

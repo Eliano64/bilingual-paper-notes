@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Stage 1 for Markdown input: an English .md note -> blocks.jsonl.
 
-    python md2blocks.py note.md -o out/md
+    python scripts/md2blocks.py note.md -o work/
 
 No parsing is involved: the file is already Markdown, so this only segments it
 into blocks and classifies them, producing the same intermediate layer the PDF
@@ -12,6 +12,7 @@ Classification rules, in order:
 
     ``` fence          -> code      (never translated)
     $$ ... $$          -> equation  (never translated)
+    $$ ... $$ on one line           -> equation (never translated)
     #+ heading         -> title     (level = number of #; never translated)
     | ... |            -> table     (never translated)
     ![[x]] / ![](x)    -> image     (never translated)
@@ -42,6 +43,15 @@ IMAGE_RE = re.compile(r"^!\[\[([^\]]+)\]\]\s*$|^!\[[^\]]*\]\(([^)]+)\)\s*$")
 REFS_HEADING_RE = re.compile(r"^(references|bibliography|参考文献)\s*$", re.I)
 
 
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def split_blocks(text: str):
     """Yield raw markdown chunks, one per block, keeping fences/$$/tables whole."""
     lines = text.split("\n")
@@ -70,6 +80,13 @@ def split_blocks(text: str):
                 i += 1
             i += 1
             yield "equation", "\n".join(chunk).strip(), None
+            continue
+        stripped = line.strip()
+        if stripped.startswith("$$") and stripped.endswith("$$") and len(stripped) > 4:
+            # display math written on one line ($$E = mc^2$$); treating it as a
+            # paragraph would hand an equation to the translator
+            yield "equation", stripped[2:-2].strip(), None
+            i += 1
             continue
         m = HEADING_RE.match(line)
         if m:
@@ -185,6 +202,7 @@ def convert(md_path: Path, out: Path) -> tuple[list[dict], dict]:
 
 
 def main(argv=None):
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("markdown", type=Path)

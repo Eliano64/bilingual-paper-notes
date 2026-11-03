@@ -23,6 +23,15 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 # --------------------------------------------------------------------------
 # LaTeX / text normalization
 # --------------------------------------------------------------------------
@@ -713,6 +722,13 @@ def normalize(middle_json: Path, pdf_path: Path, out_dir: Path,
                 rec["text"] = spans_to_md(content, markers)
                 if not rec["text"].strip():
                     continue
+            elif our == "list":
+                # MinerU can mark a list block; without this branch its content
+                # was silently emptied (rec["text"] stayed "") and then dropped.
+                spans = content if isinstance(content, list) else [content]
+                rec["text"] = spans_to_md(spans, markers)
+                if not rec["text"].strip():
+                    continue
 
             blocks.append(rec)
 
@@ -1038,7 +1054,7 @@ def render(blocks: list[dict], meta: dict, out_dir: Path, stem: str,
                 L.append("")
                 L.extend(zh_lines(zh))
             L.append("")
-        elif t == "text":
+        elif t in ("text", "list"):
             body = rec["text"]
             if tg:
                 m = _STMT_RE.match(body)
@@ -1138,6 +1154,7 @@ def dead_links(md: str) -> set[str]:
 
 
 def main(argv=None):
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("middle_json", type=Path)

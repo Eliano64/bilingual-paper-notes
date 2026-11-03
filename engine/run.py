@@ -10,7 +10,7 @@ Stages, and what each one needs:
 
     parse      MinerU 4.x (`mineru-kit`)     PDF -> middle_json.json + images
     md         this repo, PyMuPDF optional   middle_json -> blocks.jsonl + note
-    meta       network (arXiv/Crossref/S2)   adds doi/venue/year/citations
+    meta       network (Zotero/arXiv/Crossref)  adds doi/venue/year/citations
     translate  an OpenAI-compatible endpoint blocks.jsonl gets Chinese
     render     this repo                     note.md is written
     verify     this repo                     structural checks, exit 1 on failure
@@ -38,8 +38,45 @@ HERE = Path(__file__).resolve().parent
 STAGES = ("parse", "md", "meta", "translate", "render", "verify")
 
 
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console.
+
+    `sys.stdout` is cp936 on a Chinese Windows install, so a title with a
+    character outside GBK (measured: "Łukasz Kaiser") raises UnicodeEncodeError
+    while the pipeline reports progress. The output is data, not a console
+    control code, so forcing UTF-8 with replacement is safe.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
+SECRET_FLAGS = {"--zotero-key", "--api-key"}
+
+
+def printable(cmd) -> str:
+    """The command with secret values replaced, for logs and terminals.
+
+    A key passed as a flag is also in the process list and the shell history; the
+    least this can do is not print it again. Prefer the environment or the config
+    file for anything you care about.
+    """
+    out, hide = [], False
+    for part in cmd:
+        if hide:
+            out.append("***")
+            hide = False
+            continue
+        out.append(str(part))
+        if part in SECRET_FLAGS:
+            hide = True
+    return " ".join(out)
+
+
 def run(cmd, env=None, cwd=None):
-    print("  $ " + " ".join(str(c) for c in cmd), flush=True)
+    print("  $ " + printable(cmd), flush=True)
     r = subprocess.run([str(c) for c in cmd], env=env, cwd=cwd)
     if r.returncode != 0:
         sys.exit(f"stage failed (exit {r.returncode})")
@@ -146,10 +183,35 @@ def stage_parse(pdf: Path, out: Path, tier: str, mineru_home: str | None, mineru
         z.unlink()
 
 
+def warn_translations_at_risk(blocks: Path):
+    """A re-run of `md` rewrites blocks.jsonl from the parse output.
+
+    The Chinese lives in that file, so re-running `md` drops it. The cache still
+    holds every translated unit, so `--stage translate` restores it without
+    paying again — but only if the text did not change. Say so before overwriting.
+    """
+    if not blocks.exists():
+        return
+    n = 0
+    try:
+        for line in blocks.read_text(encoding="utf-8").splitlines():
+            if line.strip() and '"zh":' in line:
+                rec = json.loads(line)
+                if (rec.get("zh") or "").strip():
+                    n += 1
+    except (OSError, ValueError):
+        return
+    if n:
+        print(f"  ! {blocks} already holds {n} translation(s); rewriting it now drops "
+              f"them from the file (the translation cache keeps them, so "
+              f"--stage translate restores them for free unless the source text changed)")
+
+
 def stage_md(pdf: Path, out: Path, extra: list[str], note_name: str | None = None):
     mj = find_middle_json(out / "parse")
     if not mj:
         sys.exit(f"no middle_json.json under {out/'parse'} -- run --stage parse first")
+    warn_translations_at_risk(out / "md" / "blocks.jsonl")
     run([sys.executable, HERE / "render.py", mj, pdf, "-o", out / "md", *extra]
         + (["--note-name", note_name] if note_name else []))
 
@@ -180,12 +242,26 @@ def stage_render_markdown(source: Path, out: Path, extra: list[str], note_name: 
          "--note-name", note_name, *extra])
 
 
-def stage_meta(out: Path, pdf: Path | None, extra: list[str]):
+def stage_meta(out: Path, pdf: Path | None, extra: list[str],
+               render_extra: list[str] | None = None, note_name: str | None = None,
+               rerender: bool = True):
     meta = out / "md" / "meta.json"
     if not meta.exists():
         sys.exit("meta.json missing -- run --stage md first")
     run([sys.executable, HERE / "enrich_meta.py", meta]
         + (["--pdf", str(pdf)] if pdf else []) + list(extra))
+    # The note's properties live in the note, not in meta.json. Refreshing the
+    # metadata without re-rendering would leave the note showing the old item,
+    # which is the opposite of what "--stage meta" promises. A full run renders
+    # later anyway, so it is only re-rendered here when no render stage follows.
+    if not rerender:
+        return
+    if pdf and find_middle_json(out / "parse"):
+        print("stage render (writing the refreshed properties into the note)")
+        stage_render(pdf, out, render_extra or [], note_name)
+    else:
+        print("  note not re-rendered (no parse output); run --stage render to apply "
+              "the new metadata")
 
 
 def stage_translate(out: Path, extra: list[str], blocks_path: Path | None = None):
@@ -204,11 +280,12 @@ def stage_render(pdf: Path, out: Path, extra: list[str], note_name: str | None =
 
 
 def stage_verify(out: Path, no_translate: bool = False, blocks_path: Path | None = None,
-                 note: Path | None = None):
+                 note: Path | None = None, pdf: Path | None = None):
     blocks = blocks_path or (out / "md" / "blocks.jsonl")
     run([sys.executable, HERE / "verify.py", blocks]
         + (["--no-translate"] if no_translate else [])
-        + (["--note", str(note)] if note else []))
+        + (["--note", str(note)] if note else [])
+        + (["--pdf", str(pdf)] if pdf else []))
 
 
 def copy_to_vault(out: Path, vault: Path, pdf: Path):
@@ -231,6 +308,7 @@ def copy_to_vault(out: Path, vault: Path, pdf: Path):
 
 
 def main(argv=None):
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source", type=Path,
@@ -269,6 +347,8 @@ def main(argv=None):
     ap.add_argument("--no-zotero", action="store_true",
                     help="do not consult a Zotero library; read arXiv and Crossref only")
     ap.add_argument("--block-anchors", action="store_true")
+    ap.add_argument("--no-xref", action="store_true",
+                    help="do not build citation / cross-reference wikilinks")
     args = ap.parse_args(argv)
 
     source = args.source.expanduser().resolve()
@@ -276,9 +356,13 @@ def main(argv=None):
         sys.exit(f"no such file: {source}")
     is_markdown = source.suffix.lower() in (".md", ".markdown")
     if is_markdown:
+        if args.out is not None:
+            sys.exit("--out is not used for Markdown input: the note is written beside "
+                     "its source so relative image links keep working. Move the source, "
+                     "or use --note-name to rename the note.")
         # the note must sit beside its source (relative image links), while work
         # files go to a hidden directory next to it
-        out = (args.out or source.parent).expanduser().resolve()
+        out = source.parent
         note_name = args.note_name or f"{source.stem}.bilingual.md"
         work = markdown_work_dir(source, out)
         work.mkdir(parents=True, exist_ok=True)
@@ -297,6 +381,8 @@ def main(argv=None):
     render_flags = ["--zh-style", args.zh_style]
     if args.block_anchors:
         render_flags.append("--block-anchors")
+    if args.no_xref:
+        render_flags.append("--no-xref")
     meta_flags = []
     if args.no_zotero:
         meta_flags.append("--no-zotero")
@@ -332,7 +418,8 @@ def main(argv=None):
                 stage_md(source, out, render_flags, note_name)
         elif s == "meta":
             if not is_markdown:
-                stage_meta(out, source, meta_flags)
+                stage_meta(out, source, meta_flags, render_flags, note_name,
+                           rerender="render" not in todo)
         elif s == "translate":
             stage_translate(work, translate_flags, blocks_path=work / "blocks.jsonl")
         elif s == "render":
@@ -342,7 +429,8 @@ def main(argv=None):
                 stage_render(source, out, render_flags, note_name)
         elif s == "verify":
             stage_verify(work, args.no_translate, blocks_path=work / "blocks.jsonl",
-                         note=(markdown_note_path(source, note_name) if is_markdown else None))
+                         note=(markdown_note_path(source, note_name) if is_markdown else None),
+                         pdf=(None if is_markdown else source))
 
     note_name_for_print = note_name or f"{source.stem}.md"
     note = markdown_note_path(source, note_name_for_print) if is_markdown \

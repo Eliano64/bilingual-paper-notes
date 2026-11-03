@@ -26,6 +26,15 @@ import sys
 from pathlib import Path
 
 
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def find_note(blocks_path: Path, explicit: Path | None) -> Path | None:
     """The note lives next to blocks.jsonl and is named after the source PDF."""
     if explicit:
@@ -47,6 +56,7 @@ def find_note(blocks_path: Path, explicit: Path | None) -> Path | None:
 
 
 def main(argv=None):
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("blocks", type=Path)
@@ -133,8 +143,10 @@ def main(argv=None):
     if lost:
         hard.append(f"{len(lost)} translations contain fewer formulas than their source: "
                     f"{lost[:4]}")
-    else:
+    elif done:
         info.append("formula preservation: every translation keeps all of its inline math")
+    if not done:
+        info.append("no translations present (structure-only run?)")
     if dup:
         info.append(f"{len(dup)} blocks where the model repeated a placeholder while "
                     f"rephrasing (accepted, worth a look): {dup[:6]}")

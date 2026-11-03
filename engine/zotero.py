@@ -11,10 +11,10 @@ The key comes from, in order: an explicit argument, `ZOTERO_API_KEY`, then the
 or a parent). The library id is derived from the key, so a key alone is enough;
 say `"library": "groups/12345"` to read a group library instead.
 
-    python zotero.py --guide                       # how to get and place a key
-    python zotero.py --whoami                      # which key, which library
-    python zotero.py --find-doi 10.1103/PhysRevLett.116.061102
-    python zotero.py --find-title "Attention Is All You Need"
+    python scripts/zotero.py --guide                       # how to get and place a key
+    python scripts/zotero.py --whoami                      # which key, which library
+    python scripts/zotero.py --find-doi 10.1103/PhysRevLett.116.061102
+    python scripts/zotero.py --find-title "Attention Is All You Need"
 """
 from __future__ import annotations
 
@@ -39,6 +39,15 @@ ENV_LIBRARY = "ZOTERO_LIBRARY"
 
 # Items that are not bibliographic records, so they never answer a lookup.
 NON_RECORDS = {"attachment", "note", "annotation"}
+
+
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 
 def find_config(start: Path | None = None, levels: int = 10) -> Path | None:
@@ -316,6 +325,7 @@ class Client:
 
 
 def main(argv=None) -> int:
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--guide", action="store_true", help="print the setup instructions")
@@ -375,16 +385,22 @@ def main(argv=None) -> int:
         if items is not None:
             print(f"{len(items)} candidate record(s)")
             for it in items:
-                d = it.get("data") or {}
-                print(f"  {d.get('itemType'):18s} {d.get('date','?'):10s} {str(d.get('title'))[:70]}")
+                # candidates() returns summaries, not raw API records
+                print(f"  {str(it.get('itemType')):18s} {str(it.get('date') or '?'):10s} "
+                      f"{str(it.get('title'))[:70]}")
             item = items[0] if items else None
+            if item and item.get("key") and "data" not in item:
+                # candidates() returns summaries; fetch the record it points at
+                full, _ferr = client.fetch(item["key"])
+                if full:
+                    item = full
     if err:
         print(err)
         return 1
     if item is None:
         print("no match")
         return 1
-    d = item.get("data") or {}
+    d = item.get("data") or item
     print(f"found: {d.get('itemType')} · key={item.get('key')}")
     if args.json:
         print(json.dumps(item, ensure_ascii=False, indent=1))

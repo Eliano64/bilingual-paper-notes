@@ -6,9 +6,9 @@ of fields an item type allows come from Zotero rather than from a list kept here
 `data/zotero-schema.json` is that model, derived from the live schema at
 https://api.zotero.org/schema.
 
-    python zotero_schema.py --check              # snapshot is readable and sane
-    python zotero_schema.py --show journalArticle
-    python zotero_schema.py --refresh            # re-derive it (needs network)
+    python scripts/zotero_schema.py --check              # snapshot is readable and sane
+    python scripts/zotero_schema.py --show journalArticle
+    python scripts/zotero_schema.py --refresh            # re-derive it (needs network)
 
 The full schema is ~500 KB and mostly describes item types this pipeline never
 touches (artwork, patent, podcast, ...), so the snapshot keeps only what is used:
@@ -25,6 +25,15 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 SNAPSHOT = HERE / "data" / "zotero-schema.json"
 SCHEMA_URL = "https://api.zotero.org/schema"
+
+
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 # Keys Zotero stores on an item outside its type's field list: the object
 # envelope, plus structural keys that belong to attachment and note items.
@@ -164,6 +173,7 @@ def validate_item(schema: dict, item: dict) -> list[str]:
 
 
 def main(argv=None) -> int:
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="validate the bundled snapshot")

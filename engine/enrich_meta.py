@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Stage 4: identify the document and fill in its Zotero item.
 
-    python enrich_meta.py out/<stem>/md/meta.json [--pdf paper.pdf]
+    python scripts/enrich_meta.py <out>/md/meta.json [--pdf paper.pdf]
                            [--zotero-key KEY | --no-zotero] [--zotero-library users/123]
 
 The metadata in meta.json is a Zotero item: its field names and the set of
@@ -48,6 +48,15 @@ SIM_STRONG = 0.97
 DOI_RE = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+")
 ARXIV_RE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5})(v\d+)?")
 ISBN_RE = re.compile(r"\b(?:ISBN[- ]?(?:13|10)?[:\s]*)?(97[89][-\s]?(?:\d[-\s]?){9}\d|\d{9}[\dXx])\b")
+
+
+def utf8_console():
+    """Print UTF-8 even when stdout is a pipe on a CJK Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
 
 
 # --------------------------------------------------------------------------
@@ -435,6 +444,7 @@ def fill_empty(item: dict, other: dict, label: str, notes: list[str],
 
 
 def main(argv=None) -> int:
+    utf8_console()
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("meta", type=Path)
@@ -457,6 +467,8 @@ def main(argv=None) -> int:
     notes: list[str] = []
 
     # ---- 1. a Zotero library --------------------------------------------
+    pdf = args.pdf
+    ids = scan_pdf_ids(pdf) if pdf and pdf.exists() else {}
     zotero = None
     try:
         import zotero as zclient
@@ -465,8 +477,6 @@ def main(argv=None) -> int:
     if not args.no_zotero and zclient is not None:
         conf = zclient.resolve(key=args.zotero_key, library=args.zotero_library)
         if conf["api_key"]:
-            pdf = args.pdf
-            ids = scan_pdf_ids(pdf) if pdf and pdf.exists() else {}
             client = zclient.Client(conf["api_key"], conf["library"])
             record, err = client.by_identifier(doi=ids.get("doi"), isbn=ids.get("isbn"),
                                                arxiv=ids.get("arxiv"),
@@ -490,8 +500,6 @@ def main(argv=None) -> int:
         item["creators"] = keep_affiliations(item.get("creators") or [], parsed_creators)
 
     # ---- 2. identifiers printed on the PDF ------------------------------
-    pdf = args.pdf
-    ids = scan_pdf_ids(pdf) if pdf and pdf.exists() else {}
     if not ids and (meta.get("source_kind") or "pdf") == "pdf" and not pdf:
         notes.append("no --pdf given: identifiers printed on the document cannot be read")
     for kind, value in ids.items():
@@ -544,7 +552,11 @@ def main(argv=None) -> int:
             if not cr and err:
                 notes.append(f"crossref: {err}")
         if not cr:
-            ref_year = int((arx or {}).get("published", "0000")[:4]) or None if arx else None
+            ref_year = None
+            if arx:
+                published = str(arx.get("published") or "")
+                if published[:4].isdigit():
+                    ref_year = int(published[:4])
             cand, err = crossref_search(item.get("title") or "", item.get("creators"), ref_year=ref_year)
             time.sleep(1)
             if cand:
