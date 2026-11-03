@@ -5,7 +5,7 @@
 # point is not to translate every word, but to pin down the vocabulary the paper
 # keeps re-using, so one concept never appears under two different Chinese words.
 #
-#   run.py paper.pdf --glossary examples/glossary.example.txt
+#   run.py paper.pdf --glossary references/glossary.example.txt
 #
 # This file is MERGED over the built-in scripts/glossary.txt, which carries the
 # structural terms (theorem, figure, section, ...). Merging means you never have

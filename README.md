@@ -50,33 +50,41 @@ another environment, point the pipeline at it with
 
 ## Install
 
-As a pi package (installs both skills):
+Clone it and point an agent harness at `skills/`, or run a skill's own entry point
+directly — each skill directory is self-contained (its `scripts/` holds a full
+copy of the engine):
 
 ```bash
-pi install git:github.com/Eliano64/bilingual-paper-notes
+git clone https://github.com/Eliano64/bilingual-paper-notes
+cd bilingual-paper-notes
+
+# from the repository root
+python skills/pdf-to-obsidian/scripts/run.py papers/attention.pdf
+
+# or from the skill itself
+cd skills/pdf-to-obsidian
+python scripts/run.py ../../papers/attention.pdf
 ```
 
-Or clone it and call the scripts directly — nothing here imports pi:
+`npm pack` produces a tarball that ships both skills with their engines. pi users
+can also install it the pi way: `pi install git:github.com/Eliano64/bilingual-paper-notes`.
 
-```bash
-python scripts/run.py paper.pdf
-python skills/pdf-to-obsidian/SKILL.md    # what an agent reads
-```
-
-## Two skills, one code base
+## Two skills, one engine
 
 ![workflow](assets/workflow.svg)
 
-The two skills differ in one thing only — what they take in. Both share
-`scripts/` and the same intermediate layer (`blocks.jsonl`), so rendering,
-translation, caching and verification exist once; the Markdown path adds only
-`md2blocks.py`, a segmenter, because there is nothing to extract.
+The two skills differ in one thing only — what they take in. Each carries its own
+copy of the engine in `scripts/`, generated from the single source in `engine/`
+(`python tools/sync_engine.py`), and both use the same intermediate layer
+(`blocks.jsonl`), so rendering, translation, caching and verification exist once;
+the Markdown path adds only `md2blocks.py`, a segmenter, because there is nothing
+to extract.
 
 `pdf-to-obsidian` (a PDF in) has two modes:
 
 ```bash
-python scripts/run.py paper.pdf                  # PDF -> Markdown + Chinese
-python scripts/run.py paper.pdf --no-translate    # PDF -> Markdown only
+python skills/pdf-to-obsidian/scripts/run.py paper.pdf                   # PDF -> Markdown + Chinese
+python skills/pdf-to-obsidian/scripts/run.py paper.pdf --no-translate    # PDF -> Markdown only
 ```
 
 `translate-markdown` (an English `.md` in) owns the md → bilingual-md half: it
@@ -86,8 +94,8 @@ the PDF path is best done through its work directory, where the typed blocks are
 still available:
 
 ```bash
-python scripts/run.py paper.pdf --stage translate   # reads blocks.jsonl
-python scripts/run.py paper.pdf --stage render      # re-renders the note
+python skills/pdf-to-obsidian/scripts/run.py paper.pdf --stage translate  # reads blocks.jsonl
+python skills/pdf-to-obsidian/scripts/run.py paper.pdf --stage render     # re-renders the note
 ```
 
 Four things people ask for, and where each lands:
@@ -101,22 +109,23 @@ Four things people ask for, and where each lands:
 
 The diagram is generated from `assets/workflow.puml` (`puml assets/workflow.puml`).
 
-## Other harnesses and non-pi use
+## Other harnesses
 
-There is no pi dependency in the pipeline: standard library plus optional
+There is no harness dependency in the pipeline: standard library plus optional
 PyMuPDF, and the translation endpoint comes from `--base-url` / `--api-key` /
 `--model`, the `BPN_*` (or `OPENAI_*`) environment variables, or a
-`.bilingual-paper-notes.json` config file. Reading pi's own config is only a last-resort
-fallback for zero-config use on a pi machine; on a machine without pi that file
-does not exist and you get a clear error naming the variables to set.
+`.bilingual-paper-notes.json` config file found beside the working directory or in
+one of its parents. Nothing reads another tool's private configuration, so the
+same behaviour holds under every harness; without a key you get a clear error
+naming the variables to set.
 
 Both `SKILL.md` files follow the [Agent Skills](https://agentskills.io/specification)
 standard, so other harnesses (Claude Code, Codex, ...) can load them.
 
-The scripts are shared and referenced as `../../scripts/…`, so **keep the whole
-repository present**: point the other harness at this repository's `skills/`
-directory instead of copying a single skill directory out of it — a lone
-`skills/pdf-to-obsidian/` would not find `scripts/run.py`.
+Each skill directory is self-contained: point the harness at
+`skills/pdf-to-obsidian` or `skills/translate-markdown`, not at a checkout that is
+missing its `scripts/`. The engine copies are generated from `engine/` by
+`tools/sync_engine.py`; edit the source and re-run it rather than editing a copy.
 
 ## Quick start
 
@@ -131,10 +140,12 @@ export BPN_BASE_URL=https://api.deepseek.com/v1
 export BPN_API_KEY=sk-...
 export BPN_MODEL=deepseek-flash
 
-python scripts/run.py paper.pdf --vault ~/Obsidian/MyVault
+cd skills/pdf-to-obsidian
+python scripts/run.py ../../papers/attention.pdf --vault ~/Obsidian/MyVault
 ```
 
-Output, self-contained and safe to drop anywhere in a vault:
+Output, self-contained and safe to drop anywhere in a vault (the default
+`<stem>.md-out/` directory is gitignored):
 
 ```
 paper.md-out/
@@ -142,7 +153,7 @@ paper.md-out/
 │   ├── paper.md            the note
 │   ├── paper.assets/       figure crops and equation crops
 │   ├── blocks.jsonl        the intermediate layer (one record per block)
-│   ├── meta.json           document metadata, warnings, provenance
+│   ├── meta.json           document metadata and warnings
 │   └── translate.sqlite    translation cache
 └── parse/                  raw MinerU output, kept so stages can be re-run
 ```
@@ -164,17 +175,22 @@ the file that everything reads and writes is `blocks.jsonl`. Changing how the
 note *looks* costs nothing:
 
 ```bash
-python scripts/run.py paper.pdf --stage render --zh-style quote
+python skills/pdf-to-obsidian/scripts/run.py paper.pdf --stage render --zh-style quote
 ```
+
+`--stage meta` refreshes the item and then re-renders the note, because the
+properties live in the note rather than in `meta.json`.
 
 ## Configuration
 
 Translation endpoint, resolved in this order:
 
 1. `--base-url` / `--api-key` / `--model`
-2. `BPN_BASE_URL` / `BPN_API_KEY` / `BPN_MODEL` (or the `OPENAI_*` equivalents)
-3. `.bilingual-paper-notes.json` in the working directory, or `~/.config/bilingual-paper-notes/config.json`
-4. pi's own provider config, if pi is installed
+2. `BPN_BASE_URL` / `BPN_API_KEY` / `BPN_MODEL` (or the `OPENAI_*` equivalents; a
+   base URL and its key must come from the same pair)
+3. `.bilingual-paper-notes.json` beside the working directory or in one of its
+   parents, then `~/.config/bilingual-paper-notes/config.json` and
+   `~/.bilingual-paper-notes.json`
 
 ```json
 {
@@ -190,7 +206,7 @@ Translation endpoint, resolved in this order:
 ### Zotero (optional)
 
 Step-by-step instructions, including creating the key and troubleshooting:
-**[ZOTERO.md](ZOTERO.md)**.
+**[references/ZOTERO.md](skills/pdf-to-obsidian/references/ZOTERO.md)**.
 
 Metadata comes out shaped like a Zotero item. If the paper is already in your
 Zotero library, that library is the better source: it is authoritative, needs no
@@ -220,7 +236,8 @@ purpose, and `python scripts/zotero.py --guide` reprints these instructions.
 structural terms the render stage needs. For a real paper, copy it and add your
 field's vocabulary — terminology consistency across 700 paragraphs is the whole
 reason translation happens through an LLM here instead of a machine-translation
-API. See `examples/glossary.example.txt`.
+API. See
+`skills/pdf-to-obsidian/references/glossary.example.txt`.
 
 ## Measured baseline
 
@@ -272,9 +289,8 @@ notes.
 
 ## Interaction with other skills and plugins
 
-This package ships **skills only** — no pi extension, no custom tool, no slash
-command beyond the automatic `/skill:<name>` entries, and it never edits
-`~/.pi/agent/settings.json` or any other global config. The only files it
+This package ships **skills only** — no extension, no custom tool, no slash
+command, and it never edits any harness's global configuration. The only files it
 creates are the ones listed above, inside the output directory it is given
 (plus `.bilingual-paper-notes/<stem>/` for Markdown input).
 

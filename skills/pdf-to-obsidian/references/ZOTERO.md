@@ -1,7 +1,8 @@
 # Using your Zotero library as the metadata source
 
 This is the manual for the optional Zotero half of the pipeline: where the API key
-goes, how to check it works, and what to do when it does not.
+goes, how to check it works, and what to do when it does not. Commands below run
+from the `pdf-to-obsidian` skill directory.
 
 You do **not** need Zotero installed, and you do not need to be at the machine
 that runs Zotero. The pipeline talks to the Zotero Web API (`api.zotero.org`),
@@ -63,7 +64,8 @@ export ZOTERO_API_KEY=...        # or ZOTERO_LIBRARY=groups/1234567
 library other than the key owner's own; the default is `users/<the key's owner>`.
 
 Priority: an explicit `--zotero-key` argument, then `ZOTERO_API_KEY`, then the
-config file.
+config file. Prefer the environment or the file: a key on the command line is
+visible in the process list and in the shell history.
 
 ## Step 3 — check it works
 

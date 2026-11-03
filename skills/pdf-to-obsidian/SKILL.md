@@ -2,7 +2,7 @@
 name: pdf-to-obsidian
 description: Convert a PDF into an Obsidian-flavoured Markdown note, and optionally its bilingual half in the same run. Extracts structure (headings, lists, GFM tables, LaTeX equations, figure crops, footnotes, reference list) and links cross-references in both halves; the note's properties are a Zotero item (type, authors with the affiliations the paper prints, venue or repository, date, DOI, ISBN, url), read from your Zotero library when a key is set and otherwise from arXiv/Crossref. Two ways to run it — PDF to Markdown only (`--no-translate`, no translation endpoint needed), or PDF to Markdown plus Chinese translation in collapsible callouts (default when an endpoint is configured). Use when the user wants a paper PDF turned into an Obsidian note, its structure and metadata extracted, or the paper readable bilingually. Input that is already Markdown belongs to translate-markdown. Not for creating, merging or form-filling PDFs (pdf skill); not for authoring Obsidian syntax (obsidian-markdown).
 license: MIT
-compatibility: Requires Python 3.10+. Parsing needs MinerU 4.x (`pip install -U "mineru>=4.0,<5"` plus `mineru-kit models download`); PyMuPDF (`pip install pymupdf`) is optional but improves heading levels. Translation needs an OpenAI-compatible endpoint and API key (or pi's own provider config); pass `--no-translate` to produce the structure half only. Network access is used for the metadata stage and is optional. Tested on Windows and Linux.
+compatibility: Requires Python 3.10+. Parsing needs MinerU 4.x (`pip install -U "mineru>=4.0,<5"` plus `mineru-kit models download`); PyMuPDF (`pip install pymupdf`) is optional but improves heading levels. Translation needs an OpenAI-compatible endpoint and API key (flags, `BPN_*` / `OPENAI_*`, or `.bilingual-paper-notes.json`); pass `--no-translate` to produce the structure half only. Network access is used for the metadata stage and is optional. Tested on Windows and Linux.
 ---
 
 # PDF → bilingual Obsidian note
@@ -22,8 +22,14 @@ a collapsible callout; cross-references actually click.
 
 `pdf-to-obsidian` takes a PDF; its sibling `translate-markdown` takes a note that
 is already Markdown. That is the only difference in what they take in — both
-write a bilingual Obsidian note, and both are the same engine over the same
-intermediate layer.
+write a bilingual Obsidian note. Each skill carries its own copy of the engine in
+its `scripts/` directory, so either directory works on its own, and the commands
+below run from this skill's directory:
+
+```bash
+cd skills/pdf-to-obsidian
+python scripts/run.py paper.pdf
+```
 
 | The user wants | What to run |
 |---|---|
@@ -90,10 +96,16 @@ Translation endpoint, first match wins:
 
 ```bash
 export BPN_BASE_URL=https://api.example.com/v1 BPN_API_KEY=... BPN_MODEL=...
-# or a config file: ./.bilingual-paper-notes.json, then ~/.config/bilingual-paper-notes/config.json
+# or a config file: ./.bilingual-paper-notes.json (the nearest one in a parent
+# directory also works), then ~/.config/bilingual-paper-notes/config.json
 ```
 
-pi users need no key: pi's own provider config is the last fallback.
+The config file is found by walking up from the working directory, so a copy kept
+at the project root is found when the pipeline is run from this skill directory.
+
+Prefer the environment or the config file over `--api-key` / `--zotero-key`: a key
+passed as a flag is visible in the process list and in the shell history. The
+pipeline prints such a flag as `***` and never writes a key anywhere.
 
 ## Metadata source (Zotero)
 
@@ -111,7 +123,8 @@ When the user wants their library used, or says an author / venue / year is
 wrong:
 
 1. Check whether a key is configured: `python scripts/zotero.py --whoami`.
-2. If it prints setup instructions instead, walk them through **ZOTERO.md** (or
+2. If it prints setup instructions instead, walk them through
+   **references/ZOTERO.md** (or
    `python scripts/zotero.py --guide`): the key goes in
    `.bilingual-paper-notes.json` under `"zotero": {"api_key": "..."}`, created
    at <https://www.zotero.org/settings/keys/new> with read access only.
@@ -125,16 +138,18 @@ arXiv and Crossref fill the same fields.
 ## Usage
 
 ```bash
-python ../../scripts/run.py paper.pdf                     # all stages
-python ../../scripts/run.py paper.pdf --vault ~/Vault      # and copy into a vault
-python ../../scripts/run.py paper.pdf --no-translate      # structure only, no LLM calls
-python ../../scripts/run.py paper.pdf --stage translate   # re-run one stage
-python ../../scripts/run.py paper.pdf --zh-style callout-folded
+python scripts/run.py paper.pdf                     # all stages
+python scripts/run.py paper.pdf --vault ~/Vault     # and copy into a vault
+python scripts/run.py paper.pdf --no-translate      # structure only, no LLM calls
+python scripts/run.py paper.pdf --stage translate   # re-run one stage
+python scripts/run.py paper.pdf --zh-style callout-folded
 ```
 
 Stages: `parse` (MinerU) → `md` (normalise + render) → `meta` (Zotero, else
 arXiv / Crossref) → `translate` → `render` → `verify`. Each is re-runnable, and
-everything for a document lands in one output directory.
+everything for a document lands in one output directory. `--stage meta` re-renders
+the note after refreshing the item, because the properties live in the note, not
+in `meta.json`.
 
 Always read `verify.py`'s output last: it exits non-zero on dead links, missing
 images, lost placeholders, lost formulas or failed translation.
@@ -173,13 +188,17 @@ images, lost placeholders, lost formulas or failed translation.
 
 | Flag | Effect |
 |---|---|
-| `--zh-style quote\|callout-folded` | presentation of the Chinese half |
+| `--zh-style callout-open\|callout-folded\|quote` | presentation of the Chinese half (default `callout-open`) |
 | `--translate-captions` | also translate figure/table captions (default off) |
 | `--glossary FILE` | extra domain glossary, merged over the built-in one |
-| `--stage meta` | refresh the metadata (Zotero / arXiv / Crossref) without re-parsing or re-translating |
+| `--stage meta` | refresh the metadata (Zotero / arXiv / Crossref) without re-parsing or re-translating, then re-render the note |
 | `--stage render` | change layout only; free, no LLM calls |
-| `--zotero-key` / `--no-zotero` | read metadata from a Zotero library, or skip it (see ZOTERO.md) |
-| `--batch-units` / `--batch-chars` | translation request size (see pitfalls) |
+| `--no-xref` | do not build citation / cross-reference wikilinks |
+| `--block-anchors` | also give every block a `^b-xxxxxx` id (noisy; off by default) |
+| `--zotero-key` / `--no-zotero` | read metadata from a Zotero library, or skip it (see references/ZOTERO.md) |
+
+Translation batch size (`--batch-units`, `--batch-chars`, `--workers`) lives on
+`translate.py`, which can be run directly on `<out>/md/blocks.jsonl`.
 
 ## Pitfalls (measured, not guessed)
 
@@ -238,28 +257,33 @@ images, lost placeholders, lost formulas or failed translation.
 
 ## Portability
 
-No pi-specific code: the scripts use the standard library plus optional PyMuPDF,
-and the endpoint comes from flags, environment variables (`BPN_*` /
-`OPENAI_*`) or a `.bilingual-paper-notes.json` config file. Reading pi's config
-(`~/.pi/agent/models.json`) is only a last-resort fallback; without pi you get an
-error naming the variables to set.
+No harness-specific code: the scripts use the standard library plus optional
+PyMuPDF, and the endpoint comes from flags, environment variables (`BPN_*` /
+`OPENAI_*`) or a `.bilingual-paper-notes.json` config file found beside the
+working directory or in one of its parents. There is no fallback to another
+tool's private configuration; without a key you get an error naming the variables
+to set.
 
-The scripts are shared at `../../scripts/`, so **run from a checkout of the whole
-repository**. To use this skill in another harness, point that harness at this
-repository's `skills/` directory rather than copying this directory out of it.
+The engine ships inside this skill at `scripts/`, so **this directory is
+self-contained**: a harness can load it directly, and every command above runs
+with this skill's directory as the working directory. The repository's `engine/`
+directory is the single source those copies are generated from; run
+`python tools/sync_engine.py` after editing it (`--check` fails when a copy is
+stale).
 
 ## Files
 
 ```
-scripts/run.py            orchestrator (start here)
-scripts/render.py   MinerU middle_json -> blocks.jsonl -> note.md
-scripts/translate.py      block-level translation + sqlite cache
-scripts/enrich_meta.py    Zotero / arXiv / Crossref -> the note's Zotero item
-scripts/zotero.py         read-only Zotero Web API client (see ZOTERO.md)
-scripts/zotero_schema.py  Zotero's data model, from the official schema
-scripts/verify.py         structural checks
-scripts/md2blocks.py      Markdown input entry (see the translate-markdown skill)
-scripts/glossary.txt      default glossary (keep the structural terms)
-examples/glossary.example.txt  a filled-in domain glossary
-assets/workflow.svg       the diagram in the README (source: workflow.puml)
+scripts/run.py                orchestrator (start here)
+scripts/render.py             MinerU middle_json -> blocks.jsonl -> note.md
+scripts/translate.py          block-level translation + sqlite cache
+scripts/enrich_meta.py        Zotero / arXiv / Crossref -> the note's Zotero item
+scripts/zotero.py             read-only Zotero Web API client (see references/ZOTERO.md)
+scripts/zotero_schema.py      Zotero's data model, from the official schema
+scripts/verify.py             structural checks
+scripts/md2blocks.py          Markdown input entry (see the translate-markdown skill)
+scripts/glossary.txt          default glossary (keep the structural terms)
+scripts/data/zotero-schema.json  Zotero schema snapshot
+references/ZOTERO.md          how to set up and troubleshoot the Zotero source
+references/glossary.example.txt  a filled-in domain glossary
 ```

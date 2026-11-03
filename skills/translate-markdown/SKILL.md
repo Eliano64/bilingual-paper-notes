@@ -2,7 +2,7 @@
 name: translate-markdown
 description: Turn an English Markdown note into a bilingual Obsidian note — paragraph-level Chinese in collapsible callouts under each paragraph, while headings, code, tables, equations, references and the author's own wikilinks are left exactly as written. This is the md → bilingual-md half of the pair; the PDF half is pdf-to-obsidian, and a note it produced can be fed here. Use when the input is already Markdown — a paper's Markdown source, or a note written by pdf-to-obsidian — and the user wants it readable bilingually in Obsidian. Not for PDF input (use pdf-to-obsidian, which parses the PDF and can translate in the same run).
 license: MIT
-compatibility: Requires Python 3.10+. No PDF tooling involved. Translation needs an OpenAI-compatible endpoint and API key (BPN_* or OPENAI_* environment variables, a .bilingual-paper-notes.json config file, or pi's own provider config). Tested on Windows and Linux.
+compatibility: Requires Python 3.10+. No PDF tooling involved. Translation needs an OpenAI-compatible endpoint and API key (flags, BPN_* / OPENAI_* environment variables, or a .bilingual-paper-notes.json config file found beside the working directory or in a parent). Tested on Windows and Linux.
 ---
 
 # English Markdown → bilingual Obsidian note
@@ -48,11 +48,14 @@ which is coarser (figure and table captions become ordinary paragraphs, and are
 then translated).
 
 ```bash
-python ../../scripts/run.py note.md                    # all stages
-python ../../scripts/run.py note.md --no-translate     # segmentation only
-python ../../scripts/run.py note.md --glossary my.txt  # domain glossary
-python ../../scripts/run.py note.md --stage translate   # re-run after a glossary edit
+python scripts/run.py note.md                    # all stages
+python scripts/run.py note.md --no-translate     # segmentation only
+python scripts/run.py note.md --glossary my.txt  # domain glossary
+python scripts/run.py note.md --stage translate  # re-run after a glossary edit
 ```
+
+Run these from this skill's directory (its `scripts/` holds a full copy of the
+engine, so the directory is self-contained).
 
 Layout, which is chosen so the note stays a good citizen in a vault:
 
@@ -63,7 +66,9 @@ my-note.png                    untouched
 .bilingual-paper-notes/my-note/         blocks.jsonl, meta.json, translate.sqlite
 ```
 
-Use `--out DIR` to write the note elsewhere and `--note-name NAME` to rename it.
+Use `--note-name NAME` to rename the result. There is no way to write the note
+elsewhere: it must stay beside its source so relative image links keep resolving,
+and `--out` is rejected for Markdown input for that reason.
 
 ## What gets translated
 
@@ -77,10 +82,9 @@ Use `--out DIR` to write the note elsewhere and `--note-name NAME` to rename it.
 | `$…$` inline math, `` `code` ``, `[[wikilinks]]`, `[^n]` references | masked before the request and restored after, so they survive byte for byte |
 
 Cross-reference linkification is **off** for Markdown input: the author's own
-`[12]` citations and `[[wikilinks]]` are left exactly as written. (Pass
-`--no-xref` explicitly if a converted paper source still needs it forced off; the
-switch comes from `meta.json`, not from a flag, so it stays consistent across
-`--stage render` runs.)
+`[12]` citations and `[[wikilinks]]` are left exactly as written. The switch comes
+from `meta.json` (`source_kind: markdown`), so it stays consistent across
+`--stage render` runs; `--no-xref` forces it off explicitly when needed.
 
 ## Verification
 
@@ -110,13 +114,17 @@ not report success without it.
 
 ## Portability
 
-No pi-specific code: the scripts use the standard library only, and the endpoint
-comes from flags, environment variables (`BPN_*` / `OPENAI_*`) or a
-`.bilingual-paper-notes.json` config file. Reading pi's config is a last-resort fallback.
+No harness-specific code: the scripts use the standard library only, and the
+endpoint comes from flags, environment variables (`BPN_*` / `OPENAI_*`) or a
+`.bilingual-paper-notes.json` config file found beside the working directory or in
+one of its parents. There is no fallback to another tool's private configuration.
 
-The scripts are shared at `../../scripts/`, so **run from a checkout of the whole
-repository**. To use this skill in another harness, point that harness at this
-repository's `skills/` directory rather than copying this directory out of it.
+The engine ships inside this skill at `scripts/`, so **this directory is
+self-contained**: a harness can load it directly, and every command above runs
+with this skill's directory as the working directory. The repository's `engine/`
+directory is the single source those copies are generated from; run
+`python tools/sync_engine.py` after editing it (`--check` fails when a copy is
+stale).
 
 ## Files
 
@@ -124,7 +132,7 @@ repository's `skills/` directory rather than copying this directory out of it.
 scripts/run.py            orchestrator (start here)
 scripts/md2blocks.py      Markdown -> blocks.jsonl (the only Markdown-specific part)
 scripts/translate.py      block-level translation + sqlite cache
-scripts/render.py   renderer (blocks.jsonl -> note.md)
+scripts/render.py         renderer (blocks.jsonl -> note.md)
 scripts/verify.py         structural checks
 scripts/glossary.txt      default glossary (keep the structural terms)
 ```
