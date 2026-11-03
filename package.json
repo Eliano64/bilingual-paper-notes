@@ -1,9 +1,10 @@
 {
   "name": "bilingual-paper-notes",
-  "version": "0.1.0",
-  "description": "Convert English papers (PDF or Markdown) into bilingual Obsidian notes: preserved structure, arXiv/Crossref metadata and paragraph-level translation.",
+  "version": "0.2.0",
+  "description": "Convert English papers (PDF or Markdown) into bilingual Obsidian notes: preserved structure, Zotero/arXiv/Crossref metadata and paragraph-level translation.",
   "keywords": [
     "pi-package",
+    "agent-skills",
     "pdf",
     "markdown",
     "obsidian",
@@ -18,8 +19,10 @@
   },
   "files": [
     "skills",
+    "!**/__pycache__",
+    "!**/*.pyc",
+    "assets",
     "README.md",
-    "ZOTERO.md",
     "LICENSE"
   ]
 }

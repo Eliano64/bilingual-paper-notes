@@ -6,6 +6,7 @@ tmp/
 logs/
 .mineru/
 *.zip
+*.tgz
 
 # --- secrets: config files that hold an API key --------------------------
 .bilingual-paper-notes.json
@@ -16,6 +17,7 @@ config.local.json
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+*.md-out/
 __pycache__/
 *.pyc
 .venv/
